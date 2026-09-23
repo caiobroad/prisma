@@ -1,0 +1,117 @@
+/*
+ * Sistema visual do Prisma. As variáveis --z-* pertencem ao Modo Zona e são registradas
+ * com @property para que a troca de tema seja uma transição, não um salto.
+ * O tema (escuro/claro) muda vidro, sombras, transparências e a tinta dos acentos.
+ */
+@property --z-accent { syntax: '<color>'; inherits: true; initial-value: #7c9cff; }
+@property --z-accent-2 { syntax: '<color>'; inherits: true; initial-value: #3dd9eb; }
+@property --z-on-accent { syntax: '<color>'; inherits: true; initial-value: #0b1020; }
+@property --z-tint { syntax: '<color>'; inherits: true; initial-value: #3f5bdb; }
+@property --z-bg-1 { syntax: '<color>'; inherits: true; initial-value: #3f5bdb; }
+@property --z-bg-2 { syntax: '<color>'; inherits: true; initial-value: #1fa8ba; }
+@property --z-bg-3 { syntax: '<color>'; inherits: true; initial-value: #7a4bd8; }
+@property --z-light { syntax: '<number>'; inherits: true; initial-value: 0.3; }
+@property --z-grain { syntax: '<number>'; inherits: true; initial-value: 0.04; }
+@property --z-vignette { syntax: '<number>'; inherits: true; initial-value: 0.35; }
+@property --z-fog { syntax: '<number>'; inherits: true; initial-value: 0; }
+@property --z-sheen { syntax: '<number>'; inherits: true; initial-value: 0; }
+
+:root {
+  color-scheme: dark;
+
+  /* Tema escuro (padrão) */
+  --ground: #07090f;
+  --ground-soft: rgba(7, 9, 15, 0.86);
+  --ink: #f2f4f8;
+  --ink-2: #b3bbcb;
+  --ink-3: #7a8497;
+  --line: rgba(255, 255, 255, 0.1);
+  --line-2: rgba(255, 255, 255, 0.19);
+  --surface: rgba(255, 255, 255, 0.05);
+  --surface-2: rgba(255, 255, 255, 0.09);
+  --surface-3: rgba(255, 255, 255, 0.14);
+  --glass-base: rgba(255, 255, 255, 0.075);
+  --glass-tint: 26%;
+  /* Barra superior e menu lateral */
+  --chrome: rgba(9, 12, 19, 0.62);
+  --glass-edge: rgba(255, 255, 255, 0.15);
+  --glass-shadow: 0 22px 56px rgba(0, 0, 0, 0.3);
+  --pane: rgba(15, 18, 28, 0.92);
+  --scrim: rgba(3, 5, 10, 0.55);
+  --card-shadow: rgba(0, 0, 0, 0.5);
+  --banner-alpha: 0.42;
+  --blob-alpha: 1;
+  --vignette-rgb: 0, 0, 0;
+  --ground-grad: color-mix(in srgb, var(--z-bg-2) 55%, #07090f);
+
+  --ok: #5be3a0;
+  --warn: #f5c86b;
+  --danger: #ff7a7a;
+
+  --steam: #8fb4ff;
+  --epic: #e9edf5;
+  --gog: #c58bff;
+  --xbox: #5be3a0;
+  --manual: #f5c86b;
+
+  --display: 'Sora', ui-sans-serif, system-ui, 'Segoe UI Variable', 'Segoe UI', sans-serif;
+  --ui: 'Manrope', ui-sans-serif, system-ui, 'Segoe UI Variable', 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  /* Escala de raios: controles, cartões, painéis, janelas */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-xl: 26px;
+  --r-pill: 999px;
+
+  --blur: 24px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --titlebar-h: 56px;
+  --sidebar-w: 248px;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --ground: #e8ecf4;
+  --ground-soft: rgba(232, 236, 244, 0.9);
+  --ink: #111726;
+  --ink-2: #3e475b;
+  --ink-3: #6a7387;
+  --line: rgba(20, 28, 50, 0.1);
+  --line-2: rgba(20, 28, 50, 0.18);
+  --surface: rgba(255, 255, 255, 0.55);
+  --surface-2: rgba(255, 255, 255, 0.78);
+  --surface-3: rgba(255, 255, 255, 0.95);
+  --glass-base: rgba(255, 255, 255, 0.62);
+  --glass-tint: 10%;
+  --chrome: rgba(248, 250, 255, 0.7);
+  --glass-edge: rgba(255, 255, 255, 0.95);
+  --glass-shadow: 0 18px 44px rgba(30, 42, 80, 0.12);
+  --pane: rgba(250, 251, 255, 0.94);
+  --scrim: rgba(215, 222, 236, 0.55);
+  --card-shadow: rgba(30, 42, 80, 0.28);
+  --banner-alpha: 0.28;
+  --blob-alpha: 0.55;
+  --vignette-rgb: 225, 230, 242;
+  --ground-grad: color-mix(in srgb, var(--z-bg-2) 18%, #eef1f7);
+  --ok: #17a86a;
+  --warn: #b7791f;
+  --danger: #d64545;
+  --epic: #3a4150;
+}
+
+:root[data-glass='off'] {
+  --blur: 0px;
+}
+
+/* Atalhos da zona atual. Ficam no .app, onde a zona é aplicada. */
+.app {
+  --accent: var(--z-accent);
+  --accent-2: var(--z-accent-2);
+  /* Acento usado como texto/ícone: mais escuro no tema claro para manter contraste. */
+  --accent-ink: var(--z-accent);
+}
+:root[data-theme='light'] .app {
+  --accent-ink: color-mix(in oklab, var(--z-accent) 62%, #000);
+}

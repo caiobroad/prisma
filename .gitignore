@@ -1,0 +1,10 @@
+# Dependências e builds (os instaladores vão nas Releases do GitHub, não no repositório)
+node_modules
+out
+dist
+
+# Gerados localmente
+*.tsbuildinfo
+/Prisma.exe
+*.log
+.DS_Store

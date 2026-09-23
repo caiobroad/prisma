@@ -1,0 +1,30 @@
+appId: app.prisma.launcher
+productName: Prisma
+copyright: Prisma
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - out/**
+  - package.json
+# Só o código compilado vai no pacote: React e hls.js já estão dentro do bundle da interface.
+npmRebuild: false
+win:
+  icon: launcher/prisma.ico
+  target:
+    - nsis
+    - portable
+nsis:
+  artifactName: ${productName} Setup ${version}.${ext}
+  oneClick: true
+  perMachine: false
+  allowToChangeInstallationDirectory: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Prisma
+  uninstallDisplayName: Prisma
+  runAfterFinish: true
+  installerIcon: launcher/prisma.ico
+  uninstallerIcon: launcher/prisma.ico
+portable:
+  artifactName: ${productName} ${version} Portatil.${ext}
