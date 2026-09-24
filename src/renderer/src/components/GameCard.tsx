@@ -2,7 +2,7 @@ import { memo, useEffect, useRef, useState } from 'react'
 import type { Game } from '@shared/types'
 import { GameCover } from './GameCover'
 import { TrailerVideo } from './TrailerVideo'
-import { PF } from '../lib/format'
+import { PF, platformName } from '../lib/format'
 import { play, useStore } from '../lib/store'
 import { trailersAllowed, trailerUrl } from '../lib/trailers'
 
@@ -89,7 +89,7 @@ export const GameCard = memo(function GameCard({ game, vtKey, isHero, onOpen, on
       className="gcard"
       role="button"
       tabIndex={0}
-      aria-label={`${game.title}, ${pf.name}, ${game.installed ? 'instalado' : 'na biblioteca'}`}
+      aria-label={`${game.title}, ${platformName(game)}, ${game.installed ? 'instalado' : 'na biblioteca'}`}
       onClick={() => onOpen(game, vtKey)}
       onDoubleClick={() => play(game)}
       onKeyDown={(e) => {
@@ -117,9 +117,9 @@ export const GameCard = memo(function GameCard({ game, vtKey, isHero, onOpen, on
         <div className="gcard-name" title={game.title}>
           {game.title}
         </div>
-        <div className="gcard-pf" style={{ '--c': pf.color } as React.CSSProperties}>
+        <div className="gcard-pf" style={{ '--c': game.emuSystem ? '#ff7ad9' : pf.color } as React.CSSProperties}>
           <i />
-          {pf.name}
+          {platformName(game)}
         </div>
       </div>
     </div>

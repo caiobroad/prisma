@@ -36,7 +36,7 @@ export async function findSteamPath(): Promise<string | null> {
   return null
 }
 
-function libraryFolders(steamPath: string): string[] {
+export function libraryFolders(steamPath: string): string[] {
   const file = join(steamPath, 'steamapps', 'libraryfolders.vdf')
   const dirs = new Set<string>([steamPath])
   if (!existsSync(file)) return [...dirs]

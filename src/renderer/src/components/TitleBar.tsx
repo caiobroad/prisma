@@ -1,10 +1,24 @@
-import { memo } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import type { Game } from '@shared/types'
-import { IconBack, IconExitFullscreen, IconFullscreen, IconGamepad, IconGauge, IconRefresh, IconWinClose, IconWinMax, IconWinMin, IconWinRestore } from './Icons'
+import {
+  IconBack,
+  IconExitFullscreen,
+  IconFullscreen,
+  IconGamepad,
+  IconGauge,
+  IconModes,
+  IconSettings,
+  IconSpark,
+  IconTimeline,
+  IconWinClose,
+  IconWinMax,
+  IconWinMin,
+  IconWinRestore
+} from './Icons'
 import { Avatar } from './Avatar'
 import { MoodPicker } from './MoodPicker'
 import { SearchBox } from './SearchBox'
-import { scan, updateSettings, useStore } from '../lib/store'
+import { updateSettings, useStore } from '../lib/store'
 
 interface Props {
   query: string
@@ -12,9 +26,12 @@ interface Props {
   onOpenGame: (g: Game) => void
   canBack: boolean
   onBack: () => void
-  zoneName: string | null
   onController: () => void
   onProfile: () => void
+  onSettings: () => void
+  onPerformance: () => void
+  onTimeline: () => void
+  settingsOn: boolean
 }
 
 /** Marca do Prisma: o prisma com o feixe de luz. As faces seguem o acento da zona. */
@@ -31,13 +48,14 @@ export function PrismaMark() {
   )
 }
 
-export const TitleBar = memo(function TitleBar({ query, onQuery, onOpenGame, canBack, onBack, zoneName, onController, onProfile }: Props) {
-  const scanning = useStore((s) => s.scanning)
+/**
+ * Barra de cima enxuta: busca no centro; à direita, o menu de modos (Performance, Controle,
+ * Mood, Zona, desempenho e Timeline), o perfil e a engrenagem. A sincronização é automática.
+ */
+export const TitleBar = memo(function TitleBar(p: Props) {
   const win = useStore((s) => s.win)
-  const perfMode = useStore((s) => s.settings.performanceMode)
-  const zoneOn = useStore((s) => s.settings.zoneMode)
   const profile = useStore((s) => s.profile)
-  const enrich = useStore((s) => s.enrich)
+  const perfMode = useStore((s) => s.settings.performanceMode)
   const status = useStore((s) => (s.scanning ? 'syncing' : s.running.size > 0 ? 'playing' : 'online'))
 
   return (
@@ -47,50 +65,32 @@ export const TitleBar = memo(function TitleBar({ query, onQuery, onOpenGame, can
         Prisma
       </div>
       <div className="tb-left">
-        <button className="tb-icon" onClick={onBack} disabled={!canBack} aria-label="Voltar" title="Voltar (Esc)">
+        <button className="tb-icon" onClick={p.onBack} disabled={!p.canBack} aria-label="Voltar" title="Voltar (Esc)">
           <IconBack width={16} height={16} />
         </button>
       </div>
-      <SearchBox query={query} onQuery={onQuery} onOpenGame={onOpenGame} />
+      <SearchBox query={p.query} onQuery={p.onQuery} onOpenGame={p.onOpenGame} />
       <div className="tb-right">
-        {zoneOn && zoneName ? (
-          <span className="zone-chip" title="Modo Zona: a atmosfera segue o jogo selecionado">
-            <i />
-            <span>{zoneName}</span>
+        {perfMode ? (
+          <span className="tb-flag" title="Modo Performance ligado">
+            <IconGauge width={13} height={13} />
+            Performance
           </span>
         ) : null}
-        <button
-          className={`tb-pill ${perfMode ? 'on' : ''}`}
-          onClick={() => void updateSettings({ performanceMode: !perfMode })}
-          aria-pressed={perfMode}
-          title="Modo Performance: libera recursos para o jogo"
-        >
-          <IconGauge width={15} height={15} />
-          Modo Performance
-        </button>
-        <button className="tb-icon" onClick={onController} aria-label="Modo Controle" title="Modo Controle (Start / Options no controle)">
-          <IconGamepad width={17} height={17} />
-        </button>
-        <MoodPicker />
-        <button
-          className={`tb-icon ${scanning ? 'spin' : ''}`}
-          onClick={() => void scan()}
-          disabled={scanning}
-          aria-label="Sincronizar bibliotecas"
-          title={enrich ? `Completando a biblioteca: ${enrich.done} de ${enrich.total} jogos` : 'Sincronizar bibliotecas (F5)'}
-        >
-          <IconRefresh width={16} height={16} />
-        </button>
+        <ModesMenu onController={p.onController} onPerformance={p.onPerformance} onTimeline={p.onTimeline} />
         {profile ? (
           <button
             className={`tb-profile st-${status}`}
-            onClick={onProfile}
-            title={`${profile.nickname} · ${status === 'playing' ? 'em jogo' : status === 'syncing' ? 'sincronizando' : 'online'} · abrir perfil`}
+            onClick={p.onProfile}
+            title={`${profile.nickname} · ${status === 'playing' ? 'em jogo' : status === 'syncing' ? 'sincronizando a biblioteca' : 'online'}`}
             aria-label={`Perfil de ${profile.nickname}`}
           >
             <Avatar src={profile.avatar} name={profile.nickname} size={28} />
           </button>
         ) : null}
+        <button className={`tb-icon ${p.settingsOn ? 'on' : ''}`} onClick={p.onSettings} aria-label="Ajustes" title="Ajustes">
+          <IconSettings width={17} height={17} />
+        </button>
         <div className="winctl">
           <button onClick={() => window.nexus.window.minimize()} aria-label="Minimizar" title="Minimizar">
             <IconWinMin width={11} height={11} />
@@ -111,3 +111,86 @@ export const TitleBar = memo(function TitleBar({ query, onQuery, onOpenGame, can
     </header>
   )
 })
+
+function ModesMenu({ onController, onPerformance, onTimeline }: { onController: () => void; onPerformance: () => void; onTimeline: () => void }) {
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  const perfMode = useStore((s) => s.settings.performanceMode)
+  const zoneOn = useStore((s) => s.settings.zoneMode)
+
+  useEffect(() => {
+    if (!open) return
+    const off = (e: PointerEvent): void => {
+      if (!box.current?.contains(e.target as Node)) setOpen(false)
+    }
+    const esc = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.stopPropagation()
+        setOpen(false)
+      }
+    }
+    window.addEventListener('pointerdown', off)
+    window.addEventListener('keydown', esc, true)
+    return () => {
+      window.removeEventListener('pointerdown', off)
+      window.removeEventListener('keydown', esc, true)
+    }
+  }, [open])
+
+  const go = (fn: () => void) => () => {
+    setOpen(false)
+    fn()
+  }
+
+  return (
+    <div className="mood-pick modes" ref={box}>
+      <button className={`tb-icon ${open ? 'on' : ''}`} onClick={() => setOpen((v) => !v)} aria-label="Modos" title="Modos e atmosfera" aria-expanded={open}>
+        <IconModes width={18} height={18} />
+      </button>
+      {open ? (
+        <div className="mood-pop modes-pop glass frost" data-nav-layer>
+          <div className="modes-rows">
+            <button className="modes-row" onClick={() => void updateSettings({ performanceMode: !perfMode })}>
+              <IconGauge width={17} height={17} />
+              <span>
+                <b>Modo Performance</b>
+                <small>Libera recursos para o jogo ao clicar em Jogar</small>
+              </span>
+              <i className="tg" role="switch" aria-checked={perfMode} />
+            </button>
+            <button className="modes-row" onClick={() => void updateSettings({ zoneMode: !zoneOn })}>
+              <IconSpark width={17} height={17} />
+              <span>
+                <b>Modo Zona</b>
+                <small>A atmosfera muda com cada jogo</small>
+              </span>
+              <i className="tg" role="switch" aria-checked={zoneOn} />
+            </button>
+            <button className="modes-row" onClick={go(onController)}>
+              <IconGamepad width={17} height={17} />
+              <span>
+                <b>Modo Controle</b>
+                <small>Interface de console · Start/Options no controle</small>
+              </span>
+            </button>
+            <div className="modes-split">
+              <button className="modes-mini" onClick={go(onPerformance)}>
+                <IconGauge width={15} height={15} />
+                Desempenho
+              </button>
+              <button className="modes-mini" onClick={go(onTimeline)}>
+                <IconTimeline width={15} height={15} />
+                Timeline Gamer
+              </button>
+            </div>
+          </div>
+          <div className="mood-pop-head">
+            <b>Mood da Biblioteca</b>
+            <span>A atmosfera do launcher quando nenhum jogo define a zona</span>
+          </div>
+          <MoodPicker inline />
+        </div>
+      ) : null}
+    </div>
+  )
+}

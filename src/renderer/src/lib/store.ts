@@ -41,6 +41,8 @@ export interface State {
   /** Enriquecimento da biblioteca em segundo plano (tags, requisitos, avaliações). */
   enrich: { done: number; total: number } | null
   update: UpdateStatus | null
+  /** Versão cujas novidades aparecem no popup (depois de atualizar ou em Ajustes). */
+  whatsNew: string | null
 }
 
 let state: State = {
@@ -64,7 +66,8 @@ let state: State = {
   pickingProfile: false,
   ramGb: 0,
   enrich: null,
-  update: null
+  update: null,
+  whatsNew: null
 }
 
 const listeners = new Set<() => void>()
@@ -268,7 +271,8 @@ export function initStore(): void {
   })
   void window.nexus.update.status().then((update) => {
     setState({ update })
-    if (update.updatedFrom) toast(`Prisma atualizado para a versão ${update.current}${update.updatedFrom !== '?' ? ` (antes ${update.updatedFrom})` : ''}`, 'ok', 7000)
+    // Primeira abertura depois de atualizar: o popup de novidades mostra o que mudou.
+    if (update.updatedFrom) setState({ whatsNew: update.current })
   })
   // A cada abertura do app pergunta quem está jogando (a janela recriada depois de um jogo, não).
   void Promise.all([window.nexus.profiles.list(), window.nexus.profiles.active(), window.nexus.profiles.needsPick()]).then(

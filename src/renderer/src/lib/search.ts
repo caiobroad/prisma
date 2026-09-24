@@ -1,5 +1,5 @@
 import type { Game, Platform } from '@shared/types'
-import { PF, totalPlaytime } from './format'
+import { PF, platformName, totalPlaytime } from './format'
 
 /**
  * Busca inteligente. Texto livre procura em título, desenvolvedora, franquia e tags;
@@ -145,7 +145,7 @@ export function parseQuery(q: string): ParsedQuery {
 }
 
 export function searchIndex(g: Game): string {
-  return normalize(`${g.title} ${PF[g.platform].name} ${g.developer ?? ''} ${g.publisher ?? ''} ${g.franchise ?? ''} ${genreTags(g).join(' ')}`)
+  return normalize(`${g.title} ${platformName(g)}${g.emuSystem ? ' emulador' : ''} ${g.developer ?? ''} ${g.publisher ?? ''} ${g.franchise ?? ''} ${genreTags(g).join(' ')}`)
 }
 
 export function matches(g: Game, hay: string, p: ParsedQuery, ramGb: number): boolean {

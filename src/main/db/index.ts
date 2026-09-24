@@ -173,7 +173,8 @@ const COLUMNS: Array<[string, string]> = [
   ['min_ram_gb', 'REAL'],
   ['completed', 'INTEGER NOT NULL DEFAULT 0'],
   ['store_fetched', 'INTEGER NOT NULL DEFAULT 0'],
-  ['controller', 'TEXT']
+  ['controller', 'TEXT'],
+  ['emu_system', 'TEXT']
 ]
 
 const SESSION_COLUMNS: Array<[string, string]> = [

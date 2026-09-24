@@ -4,16 +4,18 @@ import { GameCard } from '../components/GameCard'
 import { ScrollView } from '../components/ScrollView'
 import { VirtualGrid } from '../components/VirtualGrid'
 import { formatBytes, lastActivity, PF, totalPlaytime } from '../lib/format'
+import { IconPlus, IconShelf } from '../components/Icons'
 import { matches, parseQuery, removeFilter, searchIndex } from '../lib/search'
 import { scan, useStore } from '../lib/store'
 
 type Sort = 'name' | 'recent' | 'playtime' | 'added'
-type Status = 'all' | 'installed' | 'library'
+type Status = 'all' | 'installed' | 'favorites' | 'library'
+export type LibPlatform = Platform | 'all' | 'emu'
 
 interface Props {
   query: string
-  platform: Platform | 'all'
-  onPlatform: (p: Platform | 'all') => void
+  platform: LibPlatform
+  onPlatform: (p: LibPlatform) => void
   heroKey: string | null
   onOpen: (g: Game, key: string) => void
   onHover: (g: Game | null) => void
@@ -26,6 +28,13 @@ interface Props {
 
 const PLATFORMS: Platform[] = ['steam', 'epic', 'gog', 'xbox', 'manual']
 const byName = (a: Game, b: Game): number => a.title.localeCompare(b.title, 'pt-BR')
+
+/** 'emu' = jogos de emulador; 'manual' = só os .exe adicionados à mão. */
+function inPlatform(g: Game, p: LibPlatform): boolean {
+  if (p === 'all') return true
+  if (p === 'emu') return !!g.emuSystem
+  return g.platform === p && !g.emuSystem
+}
 
 export function LibraryView({ query, platform, onPlatform, heroKey, onOpen, onHover, onAdd, onQuery, installedOnly, onCollection }: Props) {
   const games = useStore((s) => s.games)
@@ -45,8 +54,9 @@ export function LibraryView({ query, platform, onPlatform, heroKey, onOpen, onHo
 
   const list = useMemo(() => {
     const out = games.filter((g) => {
-      if (platform !== 'all' && g.platform !== platform) return false
+      if (!inPlatform(g, platform)) return false
       if (status === 'installed' && !g.installed) return false
+      if (status === 'favorites' && !g.favorite) return false
       if (status === 'library' && g.installed) return false
       return matches(g, index.get(g.id) ?? '', parsed, ramGb)
     })
@@ -60,13 +70,14 @@ export function LibraryView({ query, platform, onPlatform, heroKey, onOpen, onHo
   }, [games, index, parsed, ramGb, platform, status, sort])
 
   const counts = useMemo(() => {
-    const inPf = games.filter((g) => platform === 'all' || g.platform === platform)
+    const inPf = games.filter((g) => inPlatform(g, platform))
     const installed = inPf.filter((g) => g.installed)
     return {
       total: inPf.length,
       installed: installed.length,
       size: installed.reduce((n, g) => n + (g.installSize ?? 0), 0),
-      present: PLATFORMS.filter((p) => games.some((g) => g.platform === p))
+      present: PLATFORMS.filter((p) => games.some((g) => g.platform === p && !g.emuSystem)),
+      emu: games.some((g) => g.emuSystem)
     }
   }, [games, platform])
 
@@ -79,11 +90,11 @@ export function LibraryView({ query, platform, onPlatform, heroKey, onOpen, onHo
     <ScrollView>
       <header className="view-head">
         <div className="view-title">
-          <h1>{installedOnly ? 'Instalados' : platform === 'all' ? 'Biblioteca' : PF[platform].name}</h1>
+          <h1>{installedOnly ? 'Instalados' : platform === 'all' ? 'Biblioteca' : platform === 'emu' ? 'Emuladores' : PF[platform].name}</h1>
           <p>
             {installedOnly
-              ? `${counts.installed} jogos prontos para jogar · ${formatBytes(counts.size)} em disco`
-              : `${counts.total.toLocaleString('pt-BR')} jogos · ${counts.installed} instalados · ${(counts.total - counts.installed).toLocaleString('pt-BR')} na biblioteca`}
+              ? `${counts.installed} ${counts.installed === 1 ? 'jogo pronto' : 'jogos prontos'} para jogar · ${formatBytes(counts.size)} em disco`
+              : `${counts.total.toLocaleString('pt-BR')} ${counts.total === 1 ? 'jogo' : 'jogos'} · ${counts.installed} instalados · ${(counts.total - counts.installed).toLocaleString('pt-BR')} na biblioteca`}
           </p>
         </div>
         <div className="toolbar">
@@ -93,6 +104,7 @@ export function LibraryView({ query, platform, onPlatform, heroKey, onOpen, onHo
                 Todos os jogos
               </button>
               <button role="tab" aria-selected={false} onClick={onCollection}>
+                <IconShelf width={14} height={14} />
                 Coleção
               </button>
             </div>
@@ -103,6 +115,7 @@ export function LibraryView({ query, platform, onPlatform, heroKey, onOpen, onHo
               [
                 ['all', 'Todos'],
                 ['installed', 'Instalados'],
+                ['favorites', 'Favoritos'],
                 ['library', 'Na Biblioteca']
               ] as Array<[Status, string]>
             ).map(([id, label]) => (
@@ -121,6 +134,9 @@ export function LibraryView({ query, platform, onPlatform, heroKey, onOpen, onHo
               <option value="added">Adicionado</option>
             </select>
           </label>
+          <button className="btn ghost icobtn" onClick={onAdd} aria-label="Adicionar jogo" title="Adicionar um .exe à biblioteca">
+            <IconPlus width={17} height={17} />
+          </button>
         </div>
       </header>
 
@@ -134,6 +150,12 @@ export function LibraryView({ query, platform, onPlatform, heroKey, onOpen, onHo
             {PF[p].name}
           </button>
         ))}
+        {counts.emu ? (
+          <button className={`chip ${platform === 'emu' ? 'on' : ''}`} style={{ '--c': '#ff7ad9' } as React.CSSProperties} onClick={() => onPlatform('emu')}>
+            <i />
+            Emuladores
+          </button>
+        ) : null}
       </div>
 
       {parsed.filters.length ? (

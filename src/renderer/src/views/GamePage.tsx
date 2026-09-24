@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { Achievement, Game, Session } from '@shared/types'
+import type { Achievement, Game, ReviewsInfo, Session, WorkshopItem } from '@shared/types'
 import { GameIcon } from '../components/GameCover'
-import { IconBack, IconCheck, IconDownload, IconFolder, IconPlay, IconStar, IconTrash } from '../components/Icons'
+import { IconBack, IconCheck, IconDownload, IconExternal, IconFolder, IconPlay, IconStar, IconThumb, IconTrash } from '../components/Icons'
 import { SmartResume } from '../components/SmartResume'
 import { CommunityRadar } from '../components/CommunityRadar'
 import { imgLoad, imgRef } from '../lib/img'
@@ -15,10 +15,11 @@ import {
   formatPlaytime,
   lastActivity,
   PF,
+  platformName,
   relativeTime,
   totalPlaytime
 } from '../lib/format'
-import { loadDetails, play, removeGame, setCompleted, toggleFavorite, useStore } from '../lib/store'
+import { getState, loadDetails, play, removeGame, setCompleted, toggleFavorite, useStore } from '../lib/store'
 import { trailersAllowed, trailerUrl } from '../lib/trailers'
 
 interface Props {
@@ -38,7 +39,12 @@ export function GamePage({ game, onBack }: Props) {
   const [hasTrailer, setHasTrailer] = useState(false)
   const [confirmRemove, setConfirmRemove] = useState(false)
   const [loadingDetails, setLoadingDetails] = useState(game.trailerUrl == null && game.platform !== 'manual')
+  const [tab, setTab] = useState<Tab>('overview')
+  const [reviews, setReviews] = useState<ReviewsInfo | null | undefined>(undefined)
+  const [workshop, setWorkshop] = useState<WorkshopItem[] | null | undefined>(undefined)
+  const stopped = useRef(false)
   const pf = PF[game.platform]
+  const pfColor = game.emuSystem ? '#ff7ad9' : pf.color
   const canPlay = game.installed || game.platform === 'manual'
 
   useEffect(() => {
@@ -47,12 +53,50 @@ export function GamePage({ game, onBack }: Props) {
     if (game.id < 1_000_000) {
       void window.nexus.games.achievements(game.id).then((a) => alive && setAchievements(a))
     }
-    void trailerUrl(game.id).then((u) => alive && setHasTrailer(!!u))
+    // O trailer é o padrão: começa sozinho (mudo) no banner pouco depois de abrir a página.
+    const auto = window.setTimeout(() => {
+      void trailerUrl(game.id).then((u) => {
+        if (!alive) return
+        setHasTrailer(!!u)
+        if (u && trailersAllowed() && !stopped.current) setTrailer(u)
+      })
+    }, 900)
+    // Avaliações e Oficina só existem para jogos com página na Steam; null = esconde as abas.
+    const extra = window.setTimeout(() => {
+      if (game.id >= 1_000_000 || game.emuSystem) {
+        setReviews(null)
+        setWorkshop(null)
+        return
+      }
+      const load = (attempt: number): void => {
+        window.nexus.games.reviews(game.id).then(
+          (r) => {
+            if (!alive) return
+            setReviews(r)
+            if (r) void window.nexus.games.workshop(game.id).catch(() => null).then((w) => alive && setWorkshop(w))
+            else setWorkshop(null)
+          },
+          // Falha de rede: mais uma tentativa antes de esconder as abas.
+          () => {
+            if (alive && attempt < 1) window.setTimeout(() => alive && load(attempt + 1), 3000)
+          }
+        )
+      }
+      load(0)
+    }, 400)
     return () => {
       alive = false
+      window.clearTimeout(auto)
+      window.clearTimeout(extra)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.id])
+
+  // Começou um jogo (ou o launcher foi para segundo plano): o trailer para.
+  const allowed = useStore((s) => s.settings.trailersOnHover && !s.gameActive && !s.background)
+  useEffect(() => {
+    if (!allowed) setTrailer(null)
+  }, [allowed])
 
   useEffect(() => {
     if (game.id >= 1_000_000) return
@@ -66,10 +110,18 @@ export function GamePage({ game, onBack }: Props) {
   const record = sessions.reduce((m, s) => Math.max(m, s.durationSeconds), 0)
 
   const toggleTrailer = async (): Promise<void> => {
+    stopped.current = true
     if (trailer) return setTrailer(null)
     const u = await trailerUrl(game.id)
-    if (u && trailersAllowed()) setTrailer(u)
+    if (u && !getState().gameActive) setTrailer(u)
   }
+
+  const tabs: Array<[Tab, string, number | null]> = [
+    ['overview', 'Visão geral', null],
+    ...(achievements.length ? [['achievements', 'Conquistas', achievements.length] as [Tab, string, number]] : []),
+    ...(reviews ? [['reviews', 'Avaliações', null] as [Tab, string, null]] : []),
+    ...(workshop && workshop.length ? [['workshop', 'Oficina', null] as [Tab, string, null]] : [])
+  ]
 
   return (
     <div className="page">
@@ -102,9 +154,9 @@ export function GamePage({ game, onBack }: Props) {
           <div className="page-title-wrap">
             <h1 className="page-title">{game.title}</h1>
             <div className="page-meta">
-              <span className="badge" style={{ '--c': pf.color } as React.CSSProperties}>
+              <span className="badge" style={{ '--c': pfColor } as React.CSSProperties}>
                 <i />
-                {pf.name}
+                {platformName(game)}
               </span>
               <span className={`badge state ${game.installed ? 'is-installed' : 'is-library'}`}>
                 <i />
@@ -139,10 +191,27 @@ export function GamePage({ game, onBack }: Props) {
           </div>
         </div>
 
+        {tabs.length > 1 ? (
+          <div className="page-tabs" role="tablist" aria-label="Seções do jogo">
+            {tabs.map(([id, label, n]) => (
+              <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => setTab(id)}>
+                {label}
+                {n != null ? <em>{id === 'achievements' ? `${unlocked.length}/${n}` : n}</em> : null}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {tab === 'achievements' ? <AchievementsTab list={achievements} /> : null}
+        {tab === 'reviews' && reviews ? <ReviewsTab info={reviews} steamUrl={steamUrl(game)} /> : null}
+        {tab === 'workshop' && workshop ? <WorkshopTab items={workshop} steamUrl={steamUrl(game)} /> : null}
+
+        {tab === 'overview' ? (
+        <>
         <SmartResume game={game} />
 
         <div className="stat-strip">
-          <Stat label="Plataforma" value={pf.name} />
+          <Stat label="Plataforma" value={platformName(game)} />
           <Stat label="Tamanho" value={game.installed ? formatBytes(game.installSize) : 'Não instalado'} />
           <Stat label="Última vez aberto" value={last ? relativeTime(last) : 'Nunca'} hint={last ? formatLongDate(last) : undefined} />
           <Stat label="Tempo jogado" value={formatPlaytime(totalPlaytime(game))} hint={game.platformPlaytimeSeconds ? `${formatPlaytime(game.playtimeSeconds)} no Prisma` : undefined} />
@@ -158,31 +227,6 @@ export function GamePage({ game, onBack }: Props) {
               <About text={game.description} loading={loadingDetails} />
             </section>
             <CommunityRadar game={game} />
-            {achievements.length ? (
-              <section className="glass card pad">
-                <div className="section-head">
-                  <h2>Conquistas</h2>
-                  <span className="muted small">
-                    {unlocked.length} de {achievements.length}
-                  </span>
-                </div>
-                <div className="ach-bar">
-                  <i style={{ width: `${(100 * unlocked.length) / achievements.length}%` }} />
-                </div>
-                <ul className="ach-list">
-                  {unlocked.slice(0, 8).map((a) => (
-                    <li key={a.apiName}>
-                      {a.icon ? <img src={a.icon} alt="" loading="lazy" /> : <span className="ach-dot" />}
-                      <div>
-                        <b>{a.name}</b>
-                        {a.description ? <span>{a.description}</span> : null}
-                      </div>
-                      <time>{a.unlockedAt ? formatDate(a.unlockedAt) : '—'}</time>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
           </div>
           <div className="page-col">
             <section className="glass card pad">
@@ -193,7 +237,7 @@ export function GamePage({ game, onBack }: Props) {
                 {game.releaseDate ? <Fact k="Lançamento" v={formatLongDate(game.releaseDate)} /> : null}
                 {game.genres.length ? <Fact k="Gêneros" v={game.genres.join(', ')} /> : null}
                 {game.franchise ? <Fact k="Franquia" v={game.franchise} /> : null}
-                <Fact k="Plataforma" v={pf.name} />
+                <Fact k="Plataforma" v={game.emuSystem ? `${platformName(game)} (emulador)` : pf.name} />
                 <Fact k="Tamanho" v={game.installed ? formatBytes(game.installSize) : 'Não instalado'} />
                 {game.reviewLabel ? <Fact k="Steam" v={`${game.reviewLabel}${game.reviewCount ? ` · ${game.reviewCount.toLocaleString('pt-BR')} análises` : ''}`} /> : null}
                 {scores(game) ? <Fact k="Notas" v={scores(game)!} /> : null}
@@ -259,7 +303,7 @@ export function GamePage({ game, onBack }: Props) {
               ) : (
                 <p className="muted">O tempo passa a contar a partir do primeiro “Jogar” pelo Prisma.</p>
               )}
-              {game.platform === 'manual' ? (
+              {game.platform === 'manual' && !game.emuSystem ? (
                 confirmRemove ? (
                   <div className="row confirm">
                     <span className="muted">Remover da biblioteca? O arquivo não é apagado.</span>
@@ -280,6 +324,148 @@ export function GamePage({ game, onBack }: Props) {
             </section>
           </div>
         </div>
+        </>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+type Tab = 'overview' | 'achievements' | 'reviews' | 'workshop'
+
+function steamUrl(g: Game): string | null {
+  return g.platform === 'steam' ? `https://store.steampowered.com/app/${g.platformId}` : null
+}
+
+/** Todas as conquistas: desbloqueadas primeiro (mais recentes no topo), depois as que faltam. */
+function AchievementsTab({ list }: { list: Achievement[] }) {
+  const [show, setShow] = useState<'all' | 'done' | 'todo'>('all')
+  const done = list.filter((a) => a.unlockedAt != null).sort((a, b) => (b.unlockedAt ?? 0) - (a.unlockedAt ?? 0))
+  const todo = list.filter((a) => a.unlockedAt == null)
+  const rows = show === 'done' ? done : show === 'todo' ? todo : [...done, ...todo]
+  const pct = Math.round((100 * done.length) / Math.max(1, list.length))
+  return (
+    <section className="glass card pad tab-panel">
+      <div className="section-head">
+        <div className="ach-summary">
+          <b>{pct}%</b>
+          <span>
+            {done.length} de {list.length} conquistas
+          </span>
+        </div>
+        <div className="segmented sm" role="tablist" aria-label="Filtrar conquistas">
+          {(
+            [
+              ['all', 'Todas'],
+              ['done', 'Desbloqueadas'],
+              ['todo', 'Bloqueadas']
+            ] as const
+          ).map(([id, label]) => (
+            <button key={id} role="tab" aria-selected={show === id} className={show === id ? 'on' : ''} onClick={() => setShow(id)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="ach-bar">
+        <i style={{ width: `${pct}%` }} />
+      </div>
+      <ul className="ach-list full">
+        {rows.map((a) => (
+          <li key={a.apiName} className={a.unlockedAt == null ? 'locked' : undefined}>
+            {a.icon ? <img src={a.icon} alt="" loading="lazy" /> : <span className="ach-dot" />}
+            <div>
+              <b>{a.name}</b>
+              {a.description ? <span>{a.description}</span> : null}
+            </div>
+            <time>{a.unlockedAt ? formatDate(a.unlockedAt) : 'Bloqueada'}</time>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function ReviewsTab({ info, steamUrl }: { info: ReviewsInfo; steamUrl: string | null }) {
+  const tone = info.pct == null ? '' : info.pct >= 70 ? 'good' : info.pct >= 40 ? 'mixed' : 'bad'
+  return (
+    <div className="tab-panel">
+      <section className="glass card pad rev-summary">
+        <div className={`rev-score ${tone}`}>{info.pct != null ? `${info.pct}%` : '—'}</div>
+        <div>
+          <b>{info.label ?? 'Sem avaliações suficientes'}</b>
+          <span className="muted">{info.total.toLocaleString('pt-BR')} análises na Steam</span>
+        </div>
+        {steamUrl ? (
+          <button className="btn ghost sm" onClick={() => window.nexus.shell.openExternal(`${steamUrl}/#app_reviews_hash`)}>
+            Ver todas
+            <IconExternal width={13} height={13} />
+          </button>
+        ) : null}
+      </section>
+      {info.reviews.length ? (
+        <div className="rev-list">
+          {info.reviews.map((r, i) => (
+            <Review key={i} r={r} />
+          ))}
+        </div>
+      ) : (
+        <p className="muted">Nenhuma análise escrita para mostrar.</p>
+      )}
+    </div>
+  )
+}
+
+function Review({ r }: { r: ReviewsInfo['reviews'][number] }) {
+  const [open, setOpen] = useState(false)
+  const long = r.text.length > 320
+  return (
+    <article className={`glass card rev ${r.up ? 'up' : 'down'}`}>
+      <header>
+        <span className="rev-thumb">
+          <IconThumb width={15} height={15} down={!r.up} />
+          {r.up ? 'Recomendado' : 'Não recomendado'}
+        </span>
+        <span className="muted small">
+          {r.hours ? `${r.hours.toLocaleString('pt-BR')} h jogadas · ` : ''}
+          {formatDate(r.date)}
+          {r.lang !== 'brazilian' ? ' · em inglês' : ''}
+        </span>
+      </header>
+      <p className={open || !long ? '' : 'clamp'}>{r.text}</p>
+      <footer>
+        {long ? (
+          <button className="link" onClick={() => setOpen((v) => !v)}>
+            {open ? 'Mostrar menos' : 'Ler tudo'}
+          </button>
+        ) : (
+          <span />
+        )}
+        {r.votes ? <span className="muted small">{r.votes.toLocaleString('pt-BR')} acharam útil</span> : null}
+      </footer>
+    </article>
+  )
+}
+
+function WorkshopTab({ items, steamUrl }: { items: WorkshopItem[]; steamUrl: string | null }) {
+  return (
+    <div className="tab-panel">
+      <div className="section-head">
+        <h2>Em alta na Oficina</h2>
+        {steamUrl ? (
+          <button className="btn ghost sm" onClick={() => window.nexus.shell.openExternal(steamUrl.replace('store.steampowered.com/app', 'steamcommunity.com/app') + '/workshop/')}>
+            Abrir a Oficina
+            <IconExternal width={13} height={13} />
+          </button>
+        ) : null}
+      </div>
+      <div className="ws-grid">
+        {items.map((w) => (
+          <button key={w.id} className="ws-item glass" onClick={() => window.nexus.shell.openExternal(w.url)} title={w.title}>
+            <img src={w.image} alt="" loading="lazy" />
+            <span>{w.title}</span>
+          </button>
+        ))}
       </div>
     </div>
   )

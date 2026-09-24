@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import type { ControllerSettings, Settings } from '@shared/types'
-import { IconHeart, IconRefresh } from '../components/Icons'
+import { EMU_SYSTEMS, type ControllerSettings, type EmuInfo, type EmuSystemId, type Settings } from '@shared/types'
+import { IconFolder, IconHeart, IconRefresh, IconSearch, IconSparkles } from '../components/Icons'
 import { Avatar } from '../components/Avatar'
 import { MoodPicker } from '../components/MoodPicker'
 import { ScrollView } from '../components/ScrollView'
 import { PF, relativeTime } from '../lib/format'
 import { ZONE_PRESETS } from '../lib/zones'
-import { refreshProfiles, saveProfile, scan, switchProfile, toast, updateSettings, useStore } from '../lib/store'
+import { refreshProfiles, saveProfile, setState, switchProfile, toast, updateSettings, useStore } from '../lib/store'
 import { invalidateSocial } from '../lib/social'
 import { sfx } from '../lib/sounds'
 
@@ -14,13 +14,13 @@ type BoolKey = { [K in keyof Settings]: Settings[K] extends boolean ? K : never 
 
 const GENERAL: Array<{ key: BoolKey; title: string; desc: string }> = [
   { key: 'launchOnStartup', title: 'Iniciar com o Windows', desc: 'Abre minimizado na bandeja (só no app instalado)' },
-  { key: 'syncOnOpen', title: 'Sincronizar ao abrir', desc: 'Varre as lojas em segundo plano, e de novo a cada 30 min' },
+  { key: 'syncOnOpen', title: 'Sincronização automática', desc: 'Ao abrir, a cada 30 min e sempre que você instala, atualiza ou desinstala um jogo na Steam ou na Epic' },
   { key: 'minimizeToTray', title: 'Fechar para a bandeja', desc: 'O X esconde a janela; depois de 3 min escondida, a interface é descarregada da memória' },
   { key: 'glassEffect', title: 'Efeito de vidro', desc: 'Desative em GPUs integradas se a interface engasgar' }
 ]
 
 const EXPERIENCE: Array<{ key: BoolKey; title: string; desc: string }> = [
-  { key: 'trailersOnHover', title: 'Trailers na biblioteca', desc: 'Com o cursor (ou o foco do teclado) parado 0,8 s sobre uma capa, toca o trailer sem som' },
+  { key: 'trailersOnHover', title: 'Trailers', desc: 'Tocam sem som no banner da página do jogo e sobre a capa com o cursor parado 0,8 s' },
   { key: 'cinematicLaunch', title: 'Lançamento cinematográfico', desc: 'A interface sai de cena antes do jogo abrir e volta com transição' },
   { key: 'perfCenterOnLaunch', title: 'Performance Center antes de jogar', desc: 'Mostra CPU, GPU, temperaturas e o Modo Performance ao clicar em Jogar' },
   { key: 'idleShowcase', title: 'Vitrine ociosa', desc: 'Sem interação, o launcher passeia pela biblioteca com banners e trailers' }
@@ -120,6 +120,27 @@ export function SettingsView({ onCredits }: { onCredits: () => void }) {
         </section>
 
         <section className="glass card">
+          <h2 className="card-title">Loja</h2>
+          <div className="set">
+            <div className="it col">
+              <div>
+                <b>Chave do IsThereAnyDeal</b>
+                <span>
+                  Opcional. Com ela, a Loja mostra o menor preço que cada jogo já teve (Steam, Epic e outras lojas, em reais). Crie uma conta e gere a chave em{' '}
+                  <button className="link" onClick={() => window.nexus.shell.openExternal('https://isthereanydeal.com/apps/my/')}>
+                    isthereanydeal.com/apps/my
+                  </button>
+                  . Fica só neste PC.
+                </span>
+              </div>
+              <ItadKeyField value={settings.itadKey} />
+            </div>
+          </div>
+        </section>
+
+        <EmulatorsCard />
+
+        <section className="glass card">
           <h2 className="card-title">Conquistas e Smart Resume</h2>
           <div className="set">
             <Rows items={ACHIEVEMENTS} />
@@ -181,10 +202,10 @@ export function SettingsView({ onCredits }: { onCredits: () => void }) {
         <section className="glass card">
           <div className="card-title row between">
             <h2>Fontes da biblioteca</h2>
-            <button className="btn ghost sm" onClick={() => void scan()} disabled={scanning}>
+            <span className={`sync-state ${scanning ? 'on' : ''}`}>
               <IconRefresh width={13} height={13} />
-              {scanning ? 'Sincronizando…' : 'Sincronizar'}
-            </button>
+              {scanning ? 'Sincronizando…' : 'Automática'}
+            </span>
           </div>
           <div className="set">
             {sources.map((s) => (
@@ -213,7 +234,6 @@ export function SettingsView({ onCredits }: { onCredits: () => void }) {
             {[
               ['Ctrl K', 'Buscar'],
               ['F11', 'Tela cheia'],
-              ['F5', 'Sincronizar'],
               ['Esc', 'Voltar'],
               ['Enter', 'Abrir jogo'],
               ['Duplo clique', 'Jogar'],
@@ -311,6 +331,165 @@ function ApiKeyField({ value }: { value: string }) {
         {show ? 'Ocultar' : 'Mostrar'}
       </button>
     </div>
+  )
+}
+
+function ItadKeyField({ value }: { value: string }) {
+  const [v, setV] = useState(value)
+  const [show, setShow] = useState(false)
+  useEffect(() => setV(value), [value])
+  const save = (): void => {
+    const key = v.trim()
+    if (key === value) return
+    if (key && !/^[0-9a-z-]{20,64}$/i.test(key)) {
+      toast('Essa não parece uma chave do IsThereAnyDeal', 'err')
+      return
+    }
+    void updateSettings({ itadKey: key }).then(() => toast(key ? 'Chave salva: a Loja mostra o menor preço histórico' : 'Chave removida'))
+  }
+  return (
+    <div className="row key-field">
+      <input
+        className="input mono"
+        type={show ? 'text' : 'password'}
+        value={v}
+        placeholder="Cole a chave aqui"
+        spellCheck={false}
+        autoComplete="off"
+        onChange={(e) => setV(e.target.value)}
+        onBlur={save}
+        onKeyDown={(e) => e.key === 'Enter' && save()}
+        aria-label="Chave do IsThereAnyDeal"
+      />
+      <button className="btn ghost sm" onClick={() => setShow((s) => !s)}>
+        {show ? 'Ocultar' : 'Mostrar'}
+      </button>
+    </div>
+  )
+}
+
+const shortPath = (p: string): string => (p.length > 46 ? `${p.slice(0, 16)}…${p.slice(-28)}` : p)
+
+/**
+ * Emuladores: o Prisma não emula nada, ele organiza. Aponte o emulador de cada console e a pasta
+ * dos jogos; eles entram na biblioteca com capa. Com a nuvem ligada, os saves vão para uma pasta
+ * sincronizada (OneDrive, Google Drive, Dropbox) antes e depois de cada sessão.
+ */
+function EmulatorsCard() {
+  const [info, setInfo] = useState<EmuInfo | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    void window.nexus.emulators.info().then(setInfo)
+  }, [])
+  if (!info) return null
+  const { config } = info
+  const run = async (p: Promise<EmuInfo>): Promise<void> => {
+    setBusy(true)
+    try {
+      setInfo(await p)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const detect = async (): Promise<void> => {
+    const before = Object.values(config.exes).filter(Boolean).length
+    setBusy(true)
+    try {
+      const next = await window.nexus.emulators.detect()
+      setInfo(next)
+      const found = Object.values(next.config.exes).filter(Boolean).length
+      toast(found > before ? `${found - before} emulador(es) encontrado(s)` : found ? 'Nenhum emulador novo encontrado' : 'Nenhum emulador encontrado nas pastas comuns: escolha o executável', found > before ? 'ok' : 'err')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const rescan = async (): Promise<void> => {
+    setBusy(true)
+    try {
+      const r = await window.nexus.emulators.rescan()
+      setInfo(await window.nexus.emulators.info())
+      toast(`${r.found} jogo(s) de emulador na biblioteca${r.removed ? ` · ${r.removed} removido(s)` : ''}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const total = Object.values(info.counts).reduce((n, c) => n + (c ?? 0), 0)
+  return (
+    <section className="glass card span-2">
+      <div className="card-title row between">
+        <h2>Emuladores</h2>
+        <div className="row">
+          <button className="btn ghost sm" onClick={() => void detect()} disabled={busy}>
+            <IconSearch width={13} height={13} />
+            Detectar
+          </button>
+          <button className="btn ghost sm" onClick={() => void rescan()} disabled={busy}>
+            <IconRefresh width={13} height={13} />
+            Procurar jogos
+          </button>
+        </div>
+      </div>
+      <p className="muted small card-note">
+        Jogue sua coleção de console pelo Prisma: escolha o emulador e a pasta dos jogos de cada sistema. {total ? `${total} jogo(s) na biblioteca.` : 'Os jogos aparecem na Biblioteca, no filtro Emuladores.'}
+      </p>
+      <div className="emu-grid">
+        {info.emulators.map((e) => {
+          const exe = config.exes[e.id]
+          return (
+            <div className={`emu ${exe ? 'ok' : ''}`} key={e.id}>
+              <div className="emu-head">
+                <b>{e.name}</b>
+                <span className="muted small">{e.systems.map((s) => EMU_SYSTEMS[s].label).join(' · ')}</span>
+              </div>
+              <button className="emu-path" onClick={() => void run(window.nexus.emulators.pick('exe', e.id))} disabled={busy} title={exe || 'Escolher o executável'}>
+                <i className={exe ? 'on' : ''} />
+                <span className={exe ? 'mono' : ''}>{exe ? shortPath(exe) : 'Escolher o executável…'}</span>
+              </button>
+              {e.systems.map((s: EmuSystemId) => {
+                const dir = config.romDirs[s]
+                return (
+                  <button key={s} className="emu-path dir" onClick={() => void run(window.nexus.emulators.pick('dir', s))} disabled={busy} title={dir || `Pasta dos jogos de ${EMU_SYSTEMS[s].label}`}>
+                    <IconFolder width={13} height={13} />
+                    <span className={dir ? 'mono' : ''}>{dir ? shortPath(dir) : `Pasta dos jogos de ${EMU_SYSTEMS[s].label}…`}</span>
+                    {info.counts[s] ? <em>{info.counts[s]}</em> : null}
+                  </button>
+                )
+              })}
+            </div>
+          )
+        })}
+      </div>
+      <div className="set">
+        <div className="it">
+          <div>
+            <b>Saves na nuvem</b>
+            <span>
+              {config.cloudDir
+                ? `Antes de jogar, o Prisma traz o save mais novo de ${shortPath(config.cloudDir)}; ao fechar o jogo, envia de volta. Assim o progresso segue você em qualquer PC.`
+                : 'Escolha uma pasta sincronizada (OneDrive, Google Drive ou Dropbox) para levar os saves dos emuladores para qualquer PC.'}
+            </span>
+          </div>
+          <div className="row">
+            {!config.cloudDir && info.suggestedCloud ? (
+              <button className="btn ghost sm" onClick={() => void run(window.nexus.emulators.set({ cloudDir: info.suggestedCloud, cloudSync: true }))} disabled={busy} title={info.suggestedCloud}>
+                Usar {/onedrive/i.test(info.suggestedCloud) ? 'OneDrive' : /google/i.test(info.suggestedCloud) ? 'Google Drive' : /dropbox/i.test(info.suggestedCloud) ? 'Dropbox' : 'sugerida'}
+              </button>
+            ) : null}
+            <button className="btn ghost sm" onClick={() => void run(window.nexus.emulators.pick('dir', 'cloud'))} disabled={busy}>
+              {config.cloudDir ? 'Trocar pasta' : 'Escolher pasta'}
+            </button>
+            <button
+              className="tg"
+              role="switch"
+              aria-checked={config.cloudSync && !!config.cloudDir}
+              aria-label="Saves na nuvem"
+              disabled={!config.cloudDir || busy}
+              onClick={() => void run(window.nexus.emulators.set({ cloudSync: !config.cloudSync }))}
+            />
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -512,6 +691,16 @@ function UpdatesCard() {
               {busy ? 'Procurando…' : 'Procurar atualizações'}
             </button>
           )}
+        </div>
+        <div className="it">
+          <div>
+            <b>Novidades desta versão</b>
+            <span>O que mudou no Prisma {u?.current ?? ''}</span>
+          </div>
+          <button className="btn ghost sm" onClick={() => u && setState({ whatsNew: u.current })} disabled={!u}>
+            <IconSparkles width={13} height={13} />
+            Ver novidades
+          </button>
         </div>
         <div className="it">
           <div>

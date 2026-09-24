@@ -20,7 +20,10 @@ const api: PrismaApi = {
     recentSessions: (limit) => ipcRenderer.invoke('games:recentSessions', limit),
     sources: () => ipcRenderer.invoke('games:sources'),
     resume: (id) => ipcRenderer.invoke('games:resume', id),
-    community: (id) => ipcRenderer.invoke('games:community', id)
+    community: (id) => ipcRenderer.invoke('games:community', id),
+    reviews: (id) => ipcRenderer.invoke('games:reviews', id),
+    workshop: (id) => ipcRenderer.invoke('games:workshop', id),
+    lastPlayed: () => ipcRenderer.invoke('games:lastPlayed')
   },
   profiles: {
     list: () => ipcRenderer.invoke('profiles:list'),
@@ -69,8 +72,20 @@ const api: PrismaApi = {
     saveImage: (dataUrl, name) => ipcRenderer.invoke('shell:saveImage', dataUrl, name),
     copyImage: (dataUrl) => ipcRenderer.send('shell:copyImage', dataUrl)
   },
+  store: {
+    load: (force) => ipcRenderer.invoke('store:load', force),
+    search: (term) => ipcRenderer.invoke('store:search', term)
+  },
+  emulators: {
+    info: () => ipcRenderer.invoke('emulators:info'),
+    set: (patch) => ipcRenderer.invoke('emulators:set', patch),
+    detect: () => ipcRenderer.invoke('emulators:detect'),
+    pick: (kind, target) => ipcRenderer.invoke('emulators:pick', kind, target),
+    rescan: () => ipcRenderer.invoke('emulators:rescan')
+  },
   update: {
     status: () => ipcRenderer.invoke('update:status'),
+    changelog: (v) => ipcRenderer.invoke('update:changelog', v),
     check: () => ipcRenderer.invoke('update:check'),
     install: () => ipcRenderer.invoke('update:install'),
     openDownload: () => ipcRenderer.send('update:openDownload')

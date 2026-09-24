@@ -33,21 +33,33 @@ Teste de carga: `NEXUS_FAKE_GAMES=1200` soma 1.200 jogos sintéticos à lista (n
 | Onde                 | O que faz                                                                                                   |
 | -------------------- | ----------------------------------------------------------------------------------------------------------- |
 | Quem está jogando?   | A cada abertura do app, escolha (ou crie) o perfil. Cada perfil tem foto, banner, nickname, ajustes, sessões e histórico de busca próprios |
+| Menu lateral         | Só Início, Instalados, Biblioteca, Loja e Amigos. Timeline, Desempenho e Coleção ficam dentro das telas e no menu de modos |
+| Barra de cima        | Busca, menu de modos (Modo Performance, Modo Zona, Modo Controle, Desempenho, Timeline e Mood), perfil e engrenagem de Ajustes |
 | Início               | Destaque, Continuar jogando, Instalados e Biblioteca, com ícones por seção                                   |
 | Instalados           | Aba fixa com o que está no disco e o espaço ocupado                                                         |
-| Biblioteca           | Todos os jogos da conta em grade virtualizada. Hover (ou foco pelo teclado): inclinação 3D, brilho e sombra dinâmica; após 0,8 s, trailer sem som, com volta imediata à capa |
+| Biblioteca           | Todos os jogos da conta (e os de emulador, no filtro Emuladores) em grade virtualizada. Hover (ou foco pelo teclado): inclinação 3D, brilho e sombra dinâmica; após 0,8 s, trailer sem som, com volta imediata à capa |
 | Coleção              | A biblioteca como estante: % concluído, horas totais, mais jogados, gosto por gênero, lançamentos por ano e prateleiras por franquia |
-| Página do jogo       | Banner, ícone, Jogar/Instalar, "concluído", Smart Resume, Radar da Comunidade, requisitos mínimos (com checagem de RAM), avaliação da Steam, Metacritic, tags, franquia, tamanho |
+| Loja                 | Ofertas, mais vendidos, lançamentos e pré-vendas da Steam, grátis e promoções da Epic, em reais; busca na Steam; com a chave do IsThereAnyDeal, o menor preço histórico de cada jogo |
+| Página do jogo       | Trailer tocando sem som no banner; abas Visão geral, Conquistas (todas, com as bloqueadas), Avaliações (Steam, em português) e Oficina (itens em alta). Jogar/Instalar, "concluído", Smart Resume, Radar da Comunidade, requisitos mínimos (com checagem de RAM), avaliação da Steam, Metacritic, tags, franquia, tamanho |
 | Perfil               | Foto e banner editáveis, horas, sessões, conquistas, Game DNA (radar compartilhável em PNG), comparação de horas e bibliotecas, jogos em comum, amigos online |
 | Amigos               | Amigos da Steam (jogando, online, ausente, offline recentemente) e os outros perfis do PC, com atalho para o perfil de cada um |
 | Timeline Gamer       | Primeira sessão, último acesso, horas totais, recorde de sessão, sequências de dias, conquistas com data     |
 | Performance          | GPU, CPU, RAM, temperaturas, FPS e VRAM ao vivo; configuração do Modo Performance; histórico das sessões     |
-| Modo Controle        | Intro de console, prateleira 3D, sons de sistema, vibração, abas no L2/R2, ajustes próprios e cursor virtual no analógico direito (R3 clica) |
+| Modo Controle        | Abre no último jogo jogado (Smart Resume), intro de console, prateleira 3D, sons de sistema, vibração, abas no L2/R2, ajustes próprios e cursor virtual no analógico direito (R3 clica) |
 | Vitrine ociosa       | Sem interação e com o launcher em foco, passeia pela biblioteca com banners e trailers                        |
-| Créditos             | Coração no rodapé do menu, ou Ajustes → Créditos                                                             |
+| Créditos             | Ajustes → Créditos                                                                                            |
 
 ## Novidades desta versão
 
+- **Loja:** ofertas da Steam e da Epic com preço em reais, desconto e até quando vale. Com a chave gratuita do [IsThereAnyDeal](https://isthereanydeal.com/apps/my/) (Ajustes → Loja), cada jogo mostra o menor preço que já teve e um selo quando o preço atual é o menor de todos. A SteamDB não permite uso por apps, por isso o histórico vem do IsThereAnyDeal.
+- **Emuladores:** DuckStation (PS1), PCSX2 (PS2), PPSSPP (PSP), Dolphin (GameCube/Wii), Ryujinx (Switch) e mGBA (GBA). O Prisma não emula nada: aponte o emulador e a pasta dos jogos em Ajustes → Emuladores e eles entram na biblioteca com capa (libretro-thumbnails). Com "Saves na nuvem", os saves vão para uma pasta sincronizada (OneDrive, Google Drive ou Dropbox): o mais novo é trazido antes de jogar e enviado ao fechar.
+- **Página do jogo em abas:** Conquistas completas, Avaliações da Steam (em português, completando com inglês) e Oficina. O trailer toca sozinho, sem som, no banner.
+- **Sincronização automática:** sem botão. Além de ao abrir e a cada 30 min, o Prisma observa os manifestos da Steam e da Epic e sincroniza sozinho quando um jogo é instalado, atualizado ou desinstalado (nunca durante um jogo).
+- **Popup de atualização com changelog** e, depois de atualizar, um popup "Novidades" com as notas da versão (também em Ajustes → Atualizações → Ver novidades).
+- **Modo Controle:** abre no último jogo jogado com "Continuar"; ↑/↓ não pulam mais 8 jogos.
+- **Interface enxuta:** menu lateral com cinco itens; Ajustes numa engrenagem ao lado do perfil; Modo Performance, Modo Zona, Modo Controle, Desempenho, Timeline e Mood num só menu.
+
+## Versões anteriores
 - **Perfis:** tela "Quem está jogando?" em toda abertura. O primeiro perfil herda as sessões e ajustes antigos e é o "dono da conta Steam" (soma o tempo registrado pela Steam). Os demais contam as sessões feitas pelo Prisma.
 - **Game DNA:** RPG, FPS, Terror, Corrida, Estratégia e Sobrevivência, calculado das tags da Steam de cada jogo, pesadas por horas^0,7 (um jogo de 2.000 h não apaga o resto). Aparece no perfil de amigos e pode ser salvo ou copiado como imagem.
 - **Amigos:** sem configuração, o Prisma mostra os amigos que o cliente Steam guarda neste PC (nome e foto). Com a chave pessoal da Steam Web API (Ajustes → Amigos e comunidade), mostra quem está online ou jogando e compara bibliotecas públicas. A Epic não oferece lista de amigos para apps de terceiros.

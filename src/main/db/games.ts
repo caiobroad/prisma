@@ -42,6 +42,7 @@ interface GameRow {
   min_ram_gb: number | null
   completed: number
   controller: string | null
+  emu_system: string | null
 }
 
 const num = (v: number | null | undefined): number | null => (v == null ? null : Number(v))
@@ -97,6 +98,7 @@ function toGame(r: GameRow, ach?: { u: number; t: number }): Game {
     minRequirements: r.min_requirements,
     minRamGb: num(r.min_ram_gb),
     controller: (r.controller as Game['controller']) ?? null,
+    emuSystem: (r.emu_system as Game['emuSystem']) ?? null,
     // Concluído: marcado pelo usuário, ou todas as conquistas desbloqueadas.
     completed: Number(r.completed) === 1 || (!!ach && ach.t > 0 && ach.u >= ach.t)
   }
@@ -638,6 +640,60 @@ export function saveTags(appid: string, tags: string[]): void {
     .prepare('INSERT INTO app_tags (appid, tags, fetched_at) VALUES (?, ?, ?) ON CONFLICT(appid) DO UPDATE SET tags = excluded.tags, fetched_at = excluded.fetched_at')
     .run(appid, JSON.stringify(tags), Date.now())
 }
+// ---------- emuladores ----------
+
+/**
+ * Sincroniza os jogos de emulador com as ROMs encontradas: entram como 'manual' com
+ * platform_id "emu:<caminho>" e o sistema em emu_system. Devolve [novos, removidos].
+ */
+export function syncEmuGames(roms: Array<{ system: string; path: string; title: string; cover: string | null; banner: string | null; size: number }>): [number, number] {
+  const db = getDb()
+  const before = new Set(
+    (db.prepare("SELECT platform_id FROM games WHERE platform = 'manual' AND emu_system IS NOT NULL").all() as unknown as Array<{ platform_id: string }>).map((r) => r.platform_id)
+  )
+  const keep = new Set<string>()
+  let added = 0
+  let removed = 0
+  transaction(() => {
+    const up = db.prepare(
+      `INSERT INTO games (title, platform, platform_id, exe_path, cover_url, banner_url, installed, added_at, emu_system, install_size, details_fetched, store_fetched, trailer_url)
+       VALUES (?, 'manual', ?, ?, ?, ?, 1, ?, ?, ?, 1, 1, '')
+       ON CONFLICT(platform, platform_id) DO UPDATE SET title = excluded.title, exe_path = excluded.exe_path,
+         emu_system = excluded.emu_system, install_size = excluded.install_size, installed = 1,
+         cover_url = COALESCE(games.cover_url, excluded.cover_url), banner_url = COALESCE(games.banner_url, excluded.banner_url)`
+    )
+    for (const r of roms) {
+      const pid = 'emu:' + r.path.toLowerCase()
+      keep.add(pid)
+      if (!before.has(pid)) added++
+      up.run(r.title, pid, r.path, r.cover, r.banner, Date.now(), r.system, r.size || null)
+    }
+    const drop = db.prepare("DELETE FROM games WHERE platform = 'manual' AND platform_id = ?")
+    for (const pid of before) {
+      if (!keep.has(pid)) {
+        drop.run(pid)
+        removed++
+      }
+    }
+  })
+  return [added, removed]
+}
+
+export function emuCounts(): Record<string, number> {
+  const rows = getDb().prepare('SELECT emu_system AS s, COUNT(*) AS n FROM games WHERE emu_system IS NOT NULL GROUP BY emu_system').all() as unknown as Array<{ s: string; n: number }>
+  return Object.fromEntries(rows.map((r) => [r.s, Number(r.n)]))
+}
+
+/** Jogo aberto mais recentemente (sessão no Prisma ou registro da loja). */
+export function lastPlayedGameId(): number | null {
+  const r = getDb()
+    .prepare(
+      'SELECT id FROM games WHERE MAX(COALESCE(last_played, 0), COALESCE(platform_last_played, 0)) > 0 ORDER BY MAX(COALESCE(last_played, 0), COALESCE(platform_last_played, 0)) DESC LIMIT 1'
+    )
+    .get() as { id: number } | undefined
+  return r ? Number(r.id) : null
+}
+
 // ---------- settings ----------
 
 export function getSetting(key: string): string | null {

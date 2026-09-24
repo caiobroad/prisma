@@ -38,7 +38,11 @@ import { friendLibrary, listFriends, myLibrary, tagsFor } from './steamWeb'
 import { startEnrichment } from './enrich'
 import { pruneResume, resumeEnded, resumeStarted } from './resume'
 import { testAchievementPopup, unwatchAchievements, watchAchievements } from './notifier'
-import { checkNow, getUpdateStatus, installNow, openPortableDownload } from './updater'
+import { changelog, checkNow, getUpdateStatus, installNow, openPortableDownload } from './updater'
+import { loadStore, searchStore } from './storefront'
+import { reviewsFor, workshopFor } from './steamExtra'
+import { detectEmulators, EMULATORS, loadEmuConfig, pickEmuPath, refreshEmuGames, saveEmuConfig, suggestCloudDir, syncSaves } from './emulators'
+import { emuCounts, lastPlayedGameId } from './db/games'
 
 export interface WindowHost {
   getWindow(): BrowserWindow | null
@@ -75,6 +79,13 @@ export function scanLibraries(): Promise<ScanResult> {
       updateSource({ platform: p, count: r.games.length, lastScan: Date.now(), detail: r.detail, ok: r.ok })
     }
     await syncSteamAchievements().catch(() => 0)
+    try {
+      const [ea, er] = refreshEmuGames()
+      added += ea
+      removed += er
+    } catch {
+      /* pastas de ROMs inacessíveis */
+    }
     startEnrichment(
       (done, total) => broadcast({ type: 'enrich:progress', done, total }),
       () => broadcast({ type: 'games:changed' })
@@ -248,6 +259,51 @@ export function registerIpc(host: WindowHost, onSettings: (s: Settings) => void)
   })
   ipcMain.on('achievement:test', () => testAchievementPopup())
   ipcMain.handle('update:status', () => getUpdateStatus())
+  ipcMain.handle('update:changelog', (_e, v: string) => changelog(v))
+  ipcMain.handle('store:load', (_e, force?: boolean) => loadStore(!!force))
+  ipcMain.handle('store:search', (_e, term: string) => searchStore(term))
+  ipcMain.handle('games:reviews', (_e, id: number) => reviewsFor(id))
+  ipcMain.handle('games:workshop', (_e, id: number) => workshopFor(id))
+  ipcMain.handle('games:lastPlayed', () => {
+    const id = lastPlayedGameId()
+    return id == null ? null : { gameId: id, resume: lastResume(id, activeProfileId()) }
+  })
+  const emuInfo = () => ({
+    config: loadEmuConfig(),
+    emulators: EMULATORS.map((e) => ({ id: e.id, name: e.name, systems: e.systems })),
+    counts: emuCounts(),
+    suggestedCloud: suggestCloudDir()
+  })
+  const emuChanged = (): void => {
+    refreshEmuGames()
+    broadcast({ type: 'games:changed' })
+  }
+  ipcMain.handle('emulators:info', () => emuInfo())
+  ipcMain.handle('emulators:set', (_e, patch: Parameters<typeof saveEmuConfig>[0]) => {
+    saveEmuConfig(patch)
+    emuChanged()
+    return emuInfo()
+  })
+  ipcMain.handle('emulators:detect', () => {
+    detectEmulators()
+    return emuInfo()
+  })
+  ipcMain.handle('emulators:pick', async (_e, kind: 'exe' | 'dir', target: string) => {
+    const title = kind === 'exe' ? `Escolher o executável do ${EMULATORS.find((e) => e.id === target)?.name ?? 'emulador'}` : target === 'cloud' ? 'Escolher a pasta da nuvem para os saves' : 'Escolher a pasta dos jogos'
+    const p = await pickEmuPath(getWindow(), kind, title)
+    if (p) {
+      if (kind === 'exe') saveEmuConfig({ exes: { [target]: p } })
+      else if (target === 'cloud') saveEmuConfig({ cloudDir: p })
+      else saveEmuConfig({ romDirs: { [target]: p } })
+      emuChanged()
+    }
+    return emuInfo()
+  })
+  ipcMain.handle('emulators:rescan', () => {
+    const [found, removed] = refreshEmuGames()
+    broadcast({ type: 'games:changed' })
+    return { found, removed }
+  })
   ipcMain.handle('update:check', () => checkNow())
   ipcMain.handle('update:install', () => installNow(host.prepareQuit))
   ipcMain.on('update:openDownload', () => openPortableDownload())
@@ -269,6 +325,8 @@ export function registerIpc(host: WindowHost, onSettings: (s: Settings) => void)
       )
     } else {
       unwatchAchievements(ev.gameId)
+      // Jogo de emulador: manda os saves novos para a pasta da nuvem.
+      if (ev.game.emuSystem) syncSaves(ev.game, 'push')
       // Conquistas e screenshot da sessão que acabou de terminar: Timeline e Smart Resume.
       void Promise.all([syncSteamAchievements([ev.gameId]).catch(() => 0), resumeEnded(ev.sessionId, ev.game, ev.startedAt)]).finally(() => {
         broadcast({ type: 'session:ended', gameId: ev.gameId, durationSeconds: ev.durationSeconds })

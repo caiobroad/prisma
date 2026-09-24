@@ -10,6 +10,7 @@ import { anyRunning, finishAll, onSession } from './sessions'
 import { monitor } from './monitor'
 import { setLauncherPriority } from './perfmode'
 import { initUpdater, stopUpdater } from './updater'
+import { startAutoSync, stopAutoSync } from './autosync'
 import type { Settings } from '@shared/types'
 
 
@@ -142,6 +143,8 @@ if (primary) app.whenReady().then(() => {
   })
 
   if (settings.syncOnOpen) void scanLibraries()
+  // Sincronização automática: instalou/desinstalou na Steam ou na Epic, a biblioteca se atualiza sozinha.
+  void startAutoSync(() => loadSettings().syncOnOpen && scanLibraries())
   // Backup consistente do banco: 2 min depois de abrir (se o último tiver mais de 12 h) e a cada 12 h.
   setTimeout(() => backupDb(), 120_000).unref?.()
   setInterval(() => backupDb(), 12 * 3600_000).unref?.()
@@ -179,6 +182,7 @@ app.on('before-quit', () => {
 app.on('will-quit', () => {
   if (scanTimer) clearInterval(scanTimer)
   stopUpdater()
+  stopAutoSync()
   cancelHibernate()
   globalShortcut.unregisterAll()
   finishAll()

@@ -107,7 +107,11 @@ export function initUpdater(onStatus: Listener): void {
       set({ state: devTest ? 'none' : 'downloading', version: info.version, notes: notesOf(info), percent: 0, checkedAt: Date.now(), message: devTest ? `Teste: ${info.version} disponível` : null })
     )
     autoUpdater.on('download-progress', (p) => set({ state: 'downloading', percent: Math.round(p.percent) }))
-    autoUpdater.on('update-downloaded', (info) => set({ state: 'ready', version: info.version, notes: notesOf(info), percent: 100 }))
+    autoUpdater.on('update-downloaded', (info) => {
+      set({ state: 'ready', version: info.version, notes: notesOf(info), percent: 100 })
+      // As notas em markdown da release (mais fiéis que o HTML do feed) para a janela de novidades.
+      void changelog(info.version).then((md) => md && status.version === info.version && set({ notes: md }))
+    })
     autoUpdater.on('error', (e) => set({ state: 'error', message: friendly(e), checkedAt: Date.now() }))
   }
   timer = setTimeout(function tick() {
@@ -179,6 +183,20 @@ export function installNow(prepareQuit: () => void): { ok: boolean; message: str
   prepareQuit()
   setImmediate(() => autoUpdater.quitAndInstall(true, true))
   return { ok: true, message: `Instalando o Prisma ${status.version}…` }
+}
+
+/** Notas da versão (markdown) direto da release no GitHub; null sem internet ou sem release. */
+export async function changelog(version: string): Promise<string | null> {
+  try {
+    const res = await net.fetch(`https://api.github.com/repos/${OWNER}/${REPO}/releases/tags/v${version.replace(/^v/, '')}`, {
+      headers: { Accept: 'application/vnd.github+json' }
+    })
+    if (!res.ok) return null
+    const j = (await res.json()) as { body?: string }
+    return j.body?.trim() || null
+  } catch {
+    return null
+  }
 }
 
 export function openPortableDownload(): void {

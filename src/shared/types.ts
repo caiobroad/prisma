@@ -61,6 +61,94 @@ export interface Game {
   completed: boolean
   /** Suporte a controle segundo a loja Steam; null = ainda não se sabe (ou jogo fora da Steam). */
   controller: 'full' | 'partial' | 'none' | null
+  /** Jogo de console aberto por um emulador (platform 'manual', exePath = arquivo do jogo). */
+  emuSystem: EmuSystemId | null
+}
+
+export type EmuSystemId = 'ps1' | 'ps2' | 'psp' | 'gc' | 'wii' | 'switch' | 'gba'
+
+/** Sistemas suportados: nome, extensões dos jogos e pasta no repositório de capas do Libretro. */
+export const EMU_SYSTEMS: Record<EmuSystemId, { label: string; ext: string[]; libretro: string | null }> = {
+  ps1: { label: 'PlayStation', ext: ['.cue', '.chd', '.pbp', '.m3u'], libretro: 'Sony - PlayStation' },
+  ps2: { label: 'PlayStation 2', ext: ['.iso', '.chd', '.cso', '.gz'], libretro: 'Sony - PlayStation 2' },
+  psp: { label: 'PSP', ext: ['.iso', '.cso', '.chd', '.pbp'], libretro: 'Sony - PlayStation Portable' },
+  gc: { label: 'GameCube', ext: ['.iso', '.gcm', '.rvz', '.gcz', '.ciso'], libretro: 'Nintendo - GameCube' },
+  wii: { label: 'Wii', ext: ['.wbfs', '.rvz', '.iso', '.wia'], libretro: 'Nintendo - Wii' },
+  switch: { label: 'Nintendo Switch', ext: ['.nsp', '.xci'], libretro: null },
+  gba: { label: 'Game Boy Advance', ext: ['.gba'], libretro: 'Nintendo - Game Boy Advance' }
+}
+
+/** Configuração dos emuladores (vale para o PC todo, não por perfil). */
+export interface EmuConfig {
+  /** id do emulador → caminho do executável */
+  exes: Record<string, string>
+  /** sistema → pasta das ROMs */
+  romDirs: Partial<Record<EmuSystemId, string>>
+  /** Pasta sincronizada (OneDrive, Google Drive...) onde os saves são guardados. */
+  cloudDir: string | null
+  cloudSync: boolean
+}
+
+export interface EmuInfo {
+  config: EmuConfig
+  emulators: Array<{ id: string; name: string; systems: EmuSystemId[] }>
+  counts: Partial<Record<EmuSystemId, number>>
+  suggestedCloud: string | null
+}
+
+/** Item da loja (Steam ou Epic) com preço em reais e, se houver chave do IsThereAnyDeal, o menor preço histórico. */
+export interface StoreItem {
+  key: string
+  shop: 'steam' | 'epic'
+  title: string
+  image: string | null
+  url: string
+  /** Em centavos de real; 0 = grátis; null = sem preço (em breve). */
+  price: number | null
+  regular: number | null
+  cut: number
+  /** Fim da promoção/gratuidade (ou o início, se upcoming), quando a loja informa. */
+  until: number | null
+  /** Grátis em breve (Epic): `until` é quando começa. */
+  upcoming?: boolean
+  steamAppId: string | null
+  low: { price: number; shop: string; when: number | null } | null
+  owned: boolean
+}
+
+export interface StoreSection {
+  id: string
+  title: string
+  items: StoreItem[]
+}
+
+export interface StoreData {
+  sections: StoreSection[]
+  itad: 'ok' | 'no-key' | 'error'
+  message: string | null
+}
+
+export interface SteamReview {
+  up: boolean
+  text: string
+  hours: number
+  votes: number
+  date: number
+  lang: string
+}
+
+export interface ReviewsInfo {
+  total: number
+  pct: number | null
+  label: string | null
+  reviews: SteamReview[]
+}
+
+export interface WorkshopItem {
+  id: string
+  title: string
+  image: string
+  url: string
 }
 
 export interface Session {
@@ -234,6 +322,8 @@ export interface Settings {
   achievementSound: boolean
   /** Chave pessoal da Steam Web API (opcional): amigos online e comparação de bibliotecas. */
   steamApiKey: string
+  /** Chave do IsThereAnyDeal (opcional): menor preço histórico na Loja. */
+  itadKey: string
   controller: ControllerSettings
   /** Buscas recentes deste perfil. */
   searchHistory: string[]
@@ -273,6 +363,7 @@ export const DEFAULT_SETTINGS: Settings = {
   achievementPopup: true,
   achievementSound: true,
   steamApiKey: '',
+  itadKey: '',
   controller: DEFAULT_CONTROLLER,
   searchHistory: [],
   autoUpdate: true
@@ -345,6 +436,10 @@ export interface PrismaApi {
     /** Último cartão de Smart Resume do jogo (perfil ativo). */
     resume(id: number): Promise<ResumeCard | null>
     community(id: number): Promise<CommunityInfo>
+    reviews(id: number): Promise<ReviewsInfo | null>
+    workshop(id: number): Promise<WorkshopItem[] | null>
+    /** Último jogo aberto (qualquer plataforma) com o cartão de Smart Resume, para o Modo Controle. */
+    lastPlayed(): Promise<{ gameId: number; resume: ResumeCard | null } | null>
   }
   profiles: {
     list(): Promise<Profile[]>
@@ -393,8 +488,21 @@ export interface PrismaApi {
     saveImage(dataUrl: string, name: string): Promise<boolean>
     copyImage(dataUrl: string): void
   }
+  store: {
+    load(force?: boolean): Promise<StoreData>
+    search(term: string): Promise<StoreItem[]>
+  }
+  emulators: {
+    info(): Promise<EmuInfo>
+    set(patch: Partial<EmuConfig>): Promise<EmuInfo>
+    detect(): Promise<EmuInfo>
+    pick(kind: 'exe' | 'dir', target: string): Promise<EmuInfo>
+    rescan(): Promise<{ found: number; removed: number }>
+  }
   update: {
     status(): Promise<UpdateStatus>
+    /** Notas da versão (markdown) direto da release no GitHub. */
+    changelog(version: string): Promise<string | null>
     /** Procura agora (botão em Ajustes). */
     check(): Promise<UpdateStatus>
     /** Fecha o Prisma, instala a versão baixada e abre de novo. */

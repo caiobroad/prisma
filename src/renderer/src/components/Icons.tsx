@@ -279,3 +279,41 @@ export const IconRotate = (p: P) => (
     <path d="M19.5 4.5v4.2h-4.2" />
   </svg>
 )
+export const IconStore = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M5 8.5h14l-1 11a1.5 1.5 0 0 1-1.5 1.4h-9A1.5 1.5 0 0 1 6 19.5z" />
+    <path d="M9 10.5V7a3 3 0 0 1 6 0v3.5" />
+  </svg>
+)
+export const IconModes = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4 7h9M17 7h3M4 17h3M11 17h9" />
+    <circle cx="15" cy="7" r="2" />
+    <circle cx="9" cy="17" r="2" />
+  </svg>
+)
+export const IconClose = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M6 6l12 12M18 6 6 18" />
+  </svg>
+)
+export const IconChat = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8.5A1.5 1.5 0 0 1 19 17h-8l-4.5 3.5V17H5a1.5 1.5 0 0 1-1.5-1.5V7A1.5 1.5 0 0 1 5 5.5z" />
+  </svg>
+)
+export const IconWrench = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M14.5 5.2a4.5 4.5 0 0 0-5.3 6L4.5 16a2 2 0 0 0 2.8 2.8l4.8-4.7a4.5 4.5 0 0 0 6-5.3l-2.8 2.7-2.6-.5-.5-2.6z" />
+  </svg>
+)
+export const IconThumb = ({ down, ...p }: P & { down?: boolean }) => (
+  <svg {...base} {...p} style={{ transform: down ? 'rotate(180deg)' : undefined, ...(p.style ?? {}) }}>
+    <path d="M7.5 10.5v9h-3v-9zM7.5 10.5 11 4a2 2 0 0 1 2.8 2.3l-.8 3.2h5.5a2 2 0 0 1 2 2.4l-1.3 6.2a2 2 0 0 1-2 1.6H7.5" />
+  </svg>
+)
+export const IconSparkles = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 3.5l1.8 4.7 4.7 1.8-4.7 1.8L12 16.5l-1.8-4.7L5.5 10l4.7-1.8zM18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" />
+  </svg>
+)

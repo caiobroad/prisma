@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import type { Friend, Game, Platform } from '@shared/types'
+import type { Friend, Game } from '@shared/types'
 import { TitleBar } from './components/TitleBar'
 import { SECTION_ORDER, Sidebar, type Section } from './components/Sidebar'
 import { Toast } from './components/Toast'
@@ -10,9 +10,9 @@ import { PerformanceCenter } from './components/PerformanceCenter'
 import { LaunchCinematic } from './components/LaunchCinematic'
 import { IdleShowcase } from './components/IdleShowcase'
 import { ProfileSelect } from './components/ProfileSelect'
-import { UpdateBanner } from './components/UpdateBanner'
+import { UpdateBanner, WhatsNew } from './components/UpdateBanner'
 import { HomeView, pickFeatured } from './views/HomeView'
-import { LibraryView } from './views/LibraryView'
+import { LibraryView, type LibPlatform } from './views/LibraryView'
 import { RecentView } from './views/RecentView'
 import { FavoritesView } from './views/FavoritesView'
 import { GamePage } from './views/GamePage'
@@ -29,6 +29,7 @@ const SettingsView = lazy(() => import('./views/SettingsView').then((m) => ({ de
 const ProfileView = lazy(() => import('./views/ProfileView').then((m) => ({ default: m.ProfileView })))
 const FriendsView = lazy(() => import('./views/FriendsView').then((m) => ({ default: m.FriendsView })))
 const CollectionView = lazy(() => import('./views/CollectionView').then((m) => ({ default: m.CollectionView })))
+const StoreView = lazy(() => import('./views/StoreView').then((m) => ({ default: m.StoreView })))
 const CreditsView = lazy(() => import('./views/CreditsView').then((m) => ({ default: m.CreditsView })))
 const ControllerMode = lazy(() => import('./components/ControllerMode').then((m) => ({ default: m.ControllerMode })))
 
@@ -77,7 +78,7 @@ export default function App() {
   const profileId = useStore((s) => s.profile?.id ?? null)
 
   const [section, setSection] = useState<Section>('home')
-  const [platform, setPlatform] = useState<Platform | 'all'>('all')
+  const [platform, setPlatform] = useState<LibPlatform>('all')
   const [query, setQueryState] = useState('')
   const [adding, setAdding] = useState(false)
   const [pageId, setPageId] = useState<number | null>(null)
@@ -178,7 +179,7 @@ export default function App() {
     [section]
   )
 
-  const goPlatform = useCallback((p: Platform | 'all') => {
+  const goPlatform = useCallback((p: LibPlatform) => {
     transition(() => {
       setPageId(null)
       setSection('library')
@@ -353,11 +354,14 @@ export default function App() {
             onOpenGame={openFromSearch}
             canBack={pageId != null || (section === 'profile' && !!friend)}
             onBack={() => void goBack()}
-            zoneName={zoneGame ? zone.name : null}
             onController={() => setController(true)}
             onProfile={openProfile}
+            onSettings={() => goSection('settings')}
+            onPerformance={() => goSection('performance')}
+            onTimeline={() => goSection('timeline')}
+            settingsOn={section === 'settings' || section === 'credits'}
           />
-          <Sidebar section={section} onSection={goSection} platform={platform} onPlatform={goPlatform} onAdd={() => setAdding(true)} />
+          <Sidebar section={section} onSection={goSection} platform={platform} />
           <main className="main">
             <div className={`section ${page ? 'covered' : ''}`} inert={page ? true : undefined}>
               <Suspense fallback={<div className="view-loading" />}>
@@ -382,6 +386,7 @@ export default function App() {
                 {section === 'collection' ? <CollectionView heroKey={heroKey} onOpen={openGame} onHover={onHover} onLibrary={() => goSection('library')} /> : null}
                 {section === 'recent' ? <RecentView heroKey={heroKey} onOpen={openGame} onHover={onHover} /> : null}
                 {section === 'favorites' ? <FavoritesView heroKey={heroKey} onOpen={openGame} onHover={onHover} /> : null}
+                {section === 'store' ? <StoreView onSettings={() => goSection('settings')} /> : null}
                 {section === 'friends' ? <FriendsView onFriend={openFriend} onSettings={() => goSection('settings')} /> : null}
                 {section === 'profile' ? <ProfileView key={friend?.id ?? 'me'} friend={friend} onFriend={openFriend} onFriends={() => goSection('friends')} /> : null}
                 {section === 'timeline' ? <TimelineView onOpen={openGame} /> : null}
@@ -408,6 +413,7 @@ export default function App() {
       {launch && launch.phase !== 'center' ? <LaunchCinematic game={launch.game} phase={launch.phase} /> : null}
       {idle ? <IdleShowcase onSlide={onSlide} /> : null}
       {!picking && !controller ? <UpdateBanner /> : null}
+      {!picking && !controller ? <WhatsNew /> : null}
       <Toast />
     </div>
   )

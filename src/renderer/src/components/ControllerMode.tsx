@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ControllerSettings, Game } from '@shared/types'
+import type { ControllerSettings, Game, ResumeCard } from '@shared/types'
 import { GameCover } from './GameCover'
 import { PrismaMark } from './TitleBar'
 import { Avatar } from './Avatar'
-import { formatBytes, formatPlaytime, lastActivity, PF, relativeTime, totalPlaytime } from '../lib/format'
+import { formatBytes, formatDuration, formatPlaytime, lastActivity, platformName, relativeTime, totalPlaytime } from '../lib/format'
 import { startGame, install, toggleFavorite, updateSettings, useStore } from '../lib/store'
 import { useGamepad, type PadAction } from '../lib/input'
 import { rumble, sfx } from '../lib/sounds'
@@ -67,9 +67,26 @@ export function ControllerMode({ onExit, onFocusGame }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Smart Resume: ao entrar, o último jogo jogado já vem em foco com o painel "Continuar".
+  const [resume, setResume] = useState<{ gameId: number; card: ResumeCard | null } | null>(null)
+  const resumed = useRef(false)
+  useEffect(() => {
+    let alive = true
+    void window.nexus.games
+      .lastPlayed()
+      .catch(() => null)
+      .then((r) => alive && r && setResume({ gameId: r.gameId, card: r.resume }))
+    return () => {
+      alive = false
+    }
+  }, [])
+
   const lists = useMemo(() => {
     // Por padrão, só o que a loja Steam confirma que funciona com controle (completo ou parcial).
-    const real = games.filter((g) => g.id < 1_000_000 && (!cs.onlyCompatible || g.controller === 'full' || g.controller === 'partial'))
+    // O último jogo jogado sempre aparece, mesmo sem suporte confirmado: você acabou de jogá-lo.
+    const real = games.filter(
+      (g) => g.id < 1_000_000 && (!cs.onlyCompatible || g.controller === 'full' || g.controller === 'partial' || g.id === resume?.gameId)
+    )
     const byName = (a: Game, b: Game): number => a.title.localeCompare(b.title, 'pt-BR')
     const byRecent = (a: Game, b: Game): number => lastActivity(b) - lastActivity(a) || byName(a, b)
     return {
@@ -78,7 +95,19 @@ export function ControllerMode({ onExit, onFocusGame }: Props) {
       recent: real.filter((g) => lastActivity(g) > 0).sort(byRecent),
       favorites: real.filter((g) => g.favorite).sort(byName)
     } satisfies Record<Tab, Game[]>
-  }, [games, cs.onlyCompatible])
+  }, [games, cs.onlyCompatible, resume?.gameId])
+
+  useEffect(() => {
+    if (booting || !resume || resumed.current) return
+    resumed.current = true
+    const i = lists.all.findIndex((g) => g.id === resume.gameId)
+    if (i < 0) return
+    setTab('all')
+    setFocus((f) => ({ ...f, all: i }))
+    setAction(0)
+    setDetail(true)
+    sfx('open')
+  }, [booting, resume, lists.all])
 
   const list = lists[tab]
   const idx = Math.min(focus[tab], Math.max(0, list.length - 1))
@@ -172,8 +201,7 @@ export function ControllerMode({ onExit, onFocusGame }: Props) {
       }
       if (a === 'left') move(-1)
       else if (a === 'right') move(1)
-      else if (a === 'up') move(-8)
-      else if (a === 'down') move(8)
+
       else if (a === 'lb' || a === 'lt') switchTab(-1)
       else if (a === 'rb' || a === 'rt') switchTab(1)
       else if (a === 'back') exit()
@@ -249,6 +277,7 @@ export function ControllerMode({ onExit, onFocusGame }: Props) {
   const from = Math.max(0, idx - WINDOW_BEHIND)
   const to = Math.min(list.length, idx + WINDOW_AHEAD)
   const canPlay = game ? game.installed || game.platform === 'manual' : false
+  const resumeCard = game && resume?.gameId === game.id ? resume.card : null
 
   return (
     <div className={`cm cm-anim-${cs.animation} ${detail ? 'cm-detail-open' : ''} ${booting ? 'cm-booting' : 'cm-ready'}`}>
@@ -287,7 +316,7 @@ export function ControllerMode({ onExit, onFocusGame }: Props) {
         <div className="cm-info" key={game.id}>
           {game.logoUrl ? <img className="cm-logo" src={game.logoUrl} alt={game.title} /> : <h1 className="cm-title">{game.title}</h1>}
           <div className="cm-meta">
-            <span>{PF[game.platform].name}</span>
+            <span>{platformName(game)}</span>
             <span>{running.has(game.id) ? 'Em jogo' : game.installed ? 'Instalado' : 'Na Biblioteca'}</span>
             {totalPlaytime(game) ? <span>{formatPlaytime(totalPlaytime(game))}</span> : null}
             {lastActivity(game) ? <span>{relativeTime(lastActivity(game))}</span> : null}
@@ -338,8 +367,17 @@ export function ControllerMode({ onExit, onFocusGame }: Props) {
       </div>
 
       {detail && game ? (
-        <div className="cm-panel glass frost">
+        <div className={`cm-panel glass frost ${resumeCard ? 'has-resume' : ''}`}>
+          {resumeCard ? (
+            <div className="cm-resume">
+              {resumeCard.session.screenshot ? <img src={resumeCard.session.screenshot} alt="" /> : game.bannerUrl ? <img src={game.bannerUrl} alt="" /> : null}
+              <span>
+                <em>Última sessão</em> {relativeTime(resumeCard.session.endedAt ?? resumeCard.session.startedAt)} · {formatDuration(resumeCard.session.durationSeconds)}
+              </span>
+            </div>
+          ) : null}
           <div className="cm-panel-main">
+            {resume?.gameId === game.id ? <p className="cm-eyebrow">Continuar de onde parou</p> : null}
             <h2>{game.title}</h2>
             {game.description ? <p>{game.description}</p> : null}
             <div className="cm-panel-stats">
@@ -368,7 +406,7 @@ export function ControllerMode({ onExit, onFocusGame }: Props) {
                   handle('confirm')
                 }}
               >
-                {a === 'play' ? (running.has(game.id) ? 'Em jogo' : canPlay ? 'Jogar' : 'Instalar') : a === 'favorite' ? (game.favorite ? 'Remover favorito' : 'Favoritar') : 'Voltar'}
+                {a === 'play' ? (running.has(game.id) ? 'Em jogo' : canPlay ? (resumeCard ? 'Continuar' : 'Jogar') : 'Instalar') : a === 'favorite' ? (game.favorite ? 'Remover favorito' : 'Favoritar') : 'Voltar'}
               </button>
             ))}
           </div>

@@ -5,6 +5,7 @@ import { dirname } from 'path'
 import type { Game, LaunchResult } from '@shared/types'
 import { trackByInstallDir, trackChild, isTracked } from './sessions'
 import { epicInstallUri } from './scanners/epic'
+import { launchEmulated } from './emulators'
 
 /**
  * Lança o jogo pelo caminho nativo de cada plataforma. DRM, overlays e nuvem
@@ -17,6 +18,7 @@ export async function launchGame(game: Game): Promise<LaunchResult> {
     switch (game.platform) {
       case 'manual':
       case 'gog': {
+        if (game.emuSystem) return launchEmulated(game)
         const exe = game.exePath
         if (!exe || !existsSync(exe)) {
           if (game.platform === 'gog' && game.launchUri) {

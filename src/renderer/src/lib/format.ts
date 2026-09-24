@@ -1,4 +1,5 @@
 import type { Game, Platform } from '@shared/types'
+import { EMU_SYSTEMS } from '@shared/types'
 
 export const PF: Record<Platform, { name: string; color: string; letter: string }> = {
   steam: { name: 'Steam', color: 'var(--steam)', letter: 'S' },
@@ -92,4 +93,9 @@ export function lastActivity(g: Game): number {
 
 export function totalPlaytime(g: Game): number {
   return g.playtimeSeconds + g.platformPlaytimeSeconds
+}
+
+/** Nome da plataforma para exibir: o sistema do console nos jogos de emulador. */
+export function platformName(g: Game): string {
+  return g.emuSystem ? EMU_SYSTEMS[g.emuSystem].label : PF[g.platform].name
 }
