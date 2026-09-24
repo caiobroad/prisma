@@ -23,6 +23,7 @@ import {
   updateSource
 } from './db/games'
 import { runAllScanners } from './scanners'
+import { dbRecovery } from './db'
 import { installGame, launchGame } from './launcher'
 import { loadSettings, saveSettings } from './settings'
 import { onSession } from './sessions'
@@ -250,6 +251,10 @@ export function registerIpc(host: WindowHost, onSettings: (s: Settings) => void)
   ipcMain.handle('update:check', () => checkNow())
   ipcMain.handle('update:install', () => installNow(host.prepareQuit))
   ipcMain.on('update:openDownload', () => openPortableDownload())
+  ipcMain.handle('app:dbRecovery', () => {
+    const r = dbRecovery
+    return r ? { restored: !!r.restoredFrom, when: r.restoredFrom ? r.restoredFrom.replace(/^.*prisma-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2}).*$/, '$3/$2 $4:$5') : null } : null
+  })
   ipcMain.handle('app:system', () => ({ ramGb: Math.round(os.totalmem() / 1024 ** 3) }))
 
   ipcMain.handle('app:version', () => ({ app: app.getVersion(), electron: process.versions.electron, node: process.versions.node }))

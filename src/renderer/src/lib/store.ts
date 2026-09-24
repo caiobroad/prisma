@@ -263,6 +263,9 @@ export function initStore(): void {
   void refresh()
   void window.nexus.settings.get().then((settings) => setState({ settings }))
   void window.nexus.system().then(({ ramGb }) => setState({ ramGb }))
+  void window.nexus.dbRecovery().then((r) => {
+    if (r) toast(r.restored ? `Os dados do Prisma estavam danificados e foram restaurados do backup de ${r.when}` : 'Os dados do Prisma estavam danificados; a biblioteca foi recriada', 'err', 9000)
+  })
   void window.nexus.update.status().then((update) => {
     setState({ update })
     if (update.updatedFrom) toast(`Prisma atualizado para a versão ${update.current}${update.updatedFrom !== '?' ? ` (antes ${update.updatedFrom})` : ''}`, 'ok', 7000)

@@ -77,6 +77,7 @@ const api: PrismaApi = {
   },
   testAchievementPopup: () => ipcRenderer.send('achievement:test'),
   system: () => ipcRenderer.invoke('app:system'),
+  dbRecovery: () => ipcRenderer.invoke('app:dbRecovery'),
   on: (handler: (event: MainEvent) => void) => {
     const listener = (_e: Electron.IpcRendererEvent, ev: MainEvent): void => handler(ev)
     ipcRenderer.on('nexus:event', listener)

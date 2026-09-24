@@ -3,7 +3,7 @@ import { pathToFileURL } from 'url'
 import { createMainWindow } from './window'
 import { createTray, showWindow } from './tray'
 import { broadcast, registerIpc, scanLibraries, type WindowHost } from './ipc'
-import { closeDb } from './db'
+import { backupDb, closeDb } from './db'
 import { closeDanglingSessions } from './db/games'
 import { applySystemSettings, loadSettings } from './settings'
 import { anyRunning, finishAll, onSession } from './sessions'
@@ -29,11 +29,12 @@ let hibernated = false
 /** O que fazer quando o jogo fechar. */
 let gameMode: 'none' | 'minimized' | 'hibernated' = 'none'
 
-if (!app.requestSingleInstanceLock()) {
-  app.quit()
-} else {
-  app.on('second-instance', () => showMain())
-}
+// Uma instância só. A segunda sai na hora, antes de tocar no banco: app.quit() deixaria o
+// "ready" disparar e ela abriria o banco, migraria e varreria em paralelo com a primeira
+// (o instalador e o atualizador podem abrir o app duas vezes seguidas).
+const primary = app.requestSingleInstanceLock()
+if (!primary) app.exit(0)
+else app.on('second-instance', () => showMain())
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'cover', privileges: { standard: true, secure: true, supportFetchAPI: true, bypassCSP: true, stream: true } }])
 
@@ -104,7 +105,7 @@ const host: WindowHost = {
   }
 }
 
-app.whenReady().then(() => {
+if (primary) app.whenReady().then(() => {
   app.setAppUserModelId('app.prisma.launcher')
 
   protocol.handle('cover', (req) => {
@@ -141,6 +142,9 @@ app.whenReady().then(() => {
   })
 
   if (settings.syncOnOpen) void scanLibraries()
+  // Backup consistente do banco: 2 min depois de abrir (se o último tiver mais de 12 h) e a cada 12 h.
+  setTimeout(() => backupDb(), 120_000).unref?.()
+  setInterval(() => backupDb(), 12 * 3600_000).unref?.()
   scanTimer = setInterval(() => {
     if (!anyRunning()) void scanLibraries()
   }, 30 * 60 * 1000)

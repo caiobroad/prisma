@@ -405,6 +405,8 @@ export interface PrismaApi {
   /** Mostra uma notificação de conquista de teste (sobreposição por cima de tudo). */
   testAchievementPopup(): void
   system(): Promise<{ ramGb: number }>
+  /** O banco abriu danificado nesta execução: restaurado de backup (when) ou recriado. */
+  dbRecovery(): Promise<{ restored: boolean; when: string | null } | null>
   on(handler: (event: MainEvent) => void): () => void
   version(): Promise<{ app: string; electron: string; node: string }>
   /** Conjunto de trabalho privado do launcher (como no Gerenciador de Tarefas); null até a 1ª leitura. */
