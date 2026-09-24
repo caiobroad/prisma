@@ -11,6 +11,8 @@ interface AppDetails {
   developers?: string[]
   publishers?: string[]
   movies?: Array<{ highlight?: boolean; hls_h264?: string; mp4?: Record<string, string>; webm?: Record<string, string> }>
+  pc_requirements?: { minimum?: string; recommended?: string } | unknown[]
+  metacritic?: { score?: number }
 }
 
 const inflight = new Map<number, Promise<Game | null>>()
@@ -58,6 +60,31 @@ function decodeHtml(s: string): string {
     .trim()
 }
 
+/** Requisitos mínimos em texto limpo ("Rótulo: valor" por linha) e a RAM mínima em GB. */
+function requirements(d: AppDetails | null): { minRequirements: string | null; minRamGb: number | null } {
+  const req = d?.pc_requirements
+  const html = req && !Array.isArray(req) ? req.minimum : undefined
+  if (!html) return { minRequirements: null, minRamGb: null }
+  const text = html
+    .replace(/<\/li>|<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .split('\n')
+    .map((l) => l.replace(/\s+/g, ' ').trim())
+    .filter((l) => l && !/^(m[ií]nimos?|minimum):?$/i.test(l))
+    .join('\n')
+  const m = text.match(/(?:mem[óo]ria|memory|ram)\s*:?\s*(\d+(?:[.,]\d+)?)\s*(GB|MB)/i)
+  let ram: number | null = null
+  if (m) {
+    const v = Number(m[1].replace(',', '.'))
+    ram = /mb/i.test(m[2]) ? Math.round((v / 1024) * 10) / 10 : v
+  }
+  return { minRequirements: text || null, minRamGb: ram }
+}
+
 function pickTrailer(d: AppDetails | null): string {
   const movies = d?.movies ?? []
   const m = movies.find((x) => x.highlight && x.hls_h264) ?? movies.find((x) => x.hls_h264)
@@ -85,7 +112,9 @@ export function ensureDetails(id: number): Promise<Game | null> {
           developer: d?.developers?.[0] ?? null,
           publisher: d?.publishers?.[0] ?? null,
           trailerUrl: pickTrailer(d),
-          steamRef: ref ?? ''
+          steamRef: ref ?? '',
+          ...requirements(d),
+          metacritic: d?.metacritic?.score ?? null
         })
       } catch {
         // Sem internet ou limite da API: tenta de novo na próxima abertura do app.

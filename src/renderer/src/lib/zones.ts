@@ -1,4 +1,4 @@
-import type { Game } from '@shared/types'
+import type { Game, MoodId } from '@shared/types'
 import { hexToHsl, hsl, luminance } from './color'
 
 export type ParticleKind =
@@ -386,8 +386,8 @@ export function presetFor(game: Game): Preset | null {
   return PRESETS.find((p) => p.match.test(game.title)) ?? null
 }
 
-export function zoneFor(game: Game | null, color: string | null): ZoneTheme {
-  if (!game) return NEXUS_ZONE
+export function zoneFor(game: Game | null, color: string | null, base: ZoneTheme = NEXUS_ZONE): ZoneTheme {
+  if (!game) return base
   const backdrop = game.bannerUrl ?? game.coverUrl ?? null
   const p = presetFor(game)
   if (p) {
@@ -395,7 +395,7 @@ export function zoneFor(game: Game | null, color: string | null): ZoneTheme {
     return { ...rest, name: game.title, onAccent: onAccentFor(p.accent), backdrop }
   }
   if (color) return { ...derived(game, color), backdrop }
-  return { ...NEXUS_ZONE, id: `nexus-${game.id}`, name: game.title, backdrop }
+  return { ...base, id: `base-${game.id}`, name: game.title, backdrop }
 }
 
 /** Variáveis CSS aplicadas na raiz do app; registradas com @property para transicionar suavemente. */
@@ -414,4 +414,28 @@ export function zoneStyle(z: ZoneTheme): Record<string, string | number> {
     '--z-fog': z.fog,
     '--z-sheen': z.sheen
   }
+}
+
+/**
+ * Mood da Biblioteca: a atmosfera base do launcher quando nenhum jogo define a zona.
+ * Sempre sobre o tema escuro; muda cores, iluminação, partículas e o tom do vidro.
+ */
+export const MOODS: Array<{ id: MoodId; name: string; hint: string }> = [
+  { id: 'prisma', name: 'Prisma', hint: 'Luz fria e espectro' },
+  { id: 'resident-evil', name: 'Resident Evil', hint: 'Vermelho, cinzas e granulado' },
+  { id: 'silent-hill', name: 'Silent Hill', hint: 'Névoa densa e ferrugem' },
+  { id: 'cyberpunk', name: 'Cyberpunk', hint: 'Neon ciano e magenta' },
+  { id: 'stalker', name: 'S.T.A.L.K.E.R.', hint: 'Zona de exclusão, névoa radioativa' },
+  { id: 'minecraft', name: 'Minecraft', hint: 'Grama, terra e blocos' },
+  { id: 'doom', name: 'DOOM', hint: 'Brasas, metal e fogo' },
+  { id: 'souls', name: 'Elden Ring', hint: 'Ouro envelhecido e brasas' }
+]
+
+export function moodZone(id: MoodId): ZoneTheme {
+  if (id === 'prisma') return NEXUS_ZONE
+  const p = PRESETS.find((x) => x.id === id)
+  if (!p) return NEXUS_ZONE
+  const { match: _m, ...rest } = p
+  // Sem reflexo metálico no Mood: ele é uma animação em ciclo e o Mood fica ligado o tempo todo.
+  return { ...rest, id: `mood-${id}`, name: MOODS.find((m) => m.id === id)?.name ?? rest.name, onAccent: onAccentFor(p.accent), backdrop: null, sheen: 0 }
 }

@@ -1,9 +1,10 @@
 import { memo, useMemo, useState } from 'react'
 import type { Game } from '@shared/types'
 import { GameCard } from '../components/GameCard'
-import { IconDownload, IconPlay } from '../components/Icons'
+import { IconDownload, IconDrive, IconGrid, IconPlay, IconResume } from '../components/Icons'
 import { ScrollView } from '../components/ScrollView'
 import { artStyle } from '../lib/covers'
+import { imgLoad, imgRef } from '../lib/img'
 import { formatPlaytime, greeting, lastActivity, PF, relativeTime, totalPlaytime } from '../lib/format'
 import { play, useStore } from '../lib/store'
 
@@ -13,6 +14,7 @@ interface Props {
   onOpen: (g: Game, key: string) => void
   onHover: (g: Game | null) => void
   onGoLibrary: () => void
+  onGoInstalled: () => void
 }
 
 export function pickFeatured(games: Game[]): Game | null {
@@ -31,7 +33,8 @@ const Shelf = memo(function Shelf({
   heroKey,
   onOpen,
   onHover,
-  more
+  more,
+  Icon
 }: {
   id: string
   title: string
@@ -40,12 +43,18 @@ const Shelf = memo(function Shelf({
   onOpen: (g: Game, key: string) => void
   onHover: (g: Game | null) => void
   more?: () => void
+  Icon: typeof IconGrid
 }) {
   if (!list.length) return null
   return (
     <section className="block">
       <div className="section-head">
-        <h2>{title}</h2>
+        <h2 className="with-ico">
+          <span className="sec-ico">
+            <Icon width={16} height={16} />
+          </span>
+          {title}
+        </h2>
         {more ? (
           <button className="link" onClick={more}>
             Ver tudo
@@ -61,7 +70,7 @@ const Shelf = memo(function Shelf({
   )
 })
 
-export function HomeView({ featured, heroKey, onOpen, onHover, onGoLibrary }: Props) {
+export function HomeView({ featured, heroKey, onOpen, onHover, onGoLibrary, onGoInstalled }: Props) {
   const games = useStore((s) => s.games)
   const sources = useStore((s) => s.sources)
 
@@ -96,9 +105,9 @@ export function HomeView({ featured, heroKey, onOpen, onHover, onGoLibrary }: Pr
 
       {featured ? <Hero game={featured} heroKey={heroKey} onOpen={onOpen} /> : null}
 
-      <Shelf id="recent" title="Continuar jogando" list={shelves.recent} heroKey={heroKey} onOpen={onOpen} onHover={onHover} />
-      <Shelf id="installed" title="Instalados" list={shelves.installed} heroKey={heroKey} onOpen={onOpen} onHover={onHover} more={onGoLibrary} />
-      <Shelf id="library" title="Na sua biblioteca" list={shelves.library} heroKey={heroKey} onOpen={onOpen} onHover={onHover} more={onGoLibrary} />
+      <Shelf id="recent" Icon={IconResume} title="Continuar jogando" list={shelves.recent} heroKey={heroKey} onOpen={onOpen} onHover={onHover} />
+      <Shelf id="installed" Icon={IconDrive} title="Instalados" list={shelves.installed} heroKey={heroKey} onOpen={onOpen} onHover={onHover} more={onGoInstalled} />
+      <Shelf id="library" Icon={IconGrid} title="Biblioteca" list={shelves.library} heroKey={heroKey} onOpen={onOpen} onHover={onHover} more={onGoLibrary} />
     </ScrollView>
   )
 }
@@ -115,7 +124,7 @@ function Hero({ game, heroKey, onOpen }: { game: Game; heroKey: string | null; o
     <div className="hero">
       <div className="hero-art" style={heroKey === key ? { viewTransitionName: 'game-hero' } : undefined}>
         {game.bannerUrl && !broken ? (
-          <img src={game.bannerUrl} alt="" draggable={false} decoding="async" onError={() => setBroken(true)} />
+          <img ref={imgRef} className="fade-img" src={game.bannerUrl} alt="" draggable={false} decoding="async" onLoad={imgLoad} onError={() => setBroken(true)} />
         ) : (
           <div className="art" style={artStyle(game.title)} />
         )}

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Game } from '@shared/types'
 import { artStyle, monogram } from '../lib/covers'
+import { imgLoad, imgRef } from '../lib/img'
 
 /**
  * Capa vertical 2:3. Sem box art oficial, monta um pôster: banner recortado ao centro,
@@ -19,12 +20,12 @@ export function GameCover({ game }: { game: Game }) {
   }
 
   if (ok(game.coverUrl)) {
-    return <img className="cover-img" src={game.coverUrl} alt="" loading="lazy" decoding="async" draggable={false} onError={fail(game.coverUrl)} />
+    return <img ref={imgRef} className="cover-img fade-img" src={game.coverUrl} alt="" loading="lazy" decoding="async" draggable={false} onLoad={imgLoad} onError={fail(game.coverUrl)} />
   }
   return (
     <div className="cover-gen" style={artStyle(game.title)}>
       {ok(game.bannerUrl) ? (
-        <img className="cover-gen-bg" src={game.bannerUrl} alt="" loading="lazy" draggable={false} onError={fail(game.bannerUrl)} />
+        <img ref={imgRef} className="cover-gen-bg fade-img" src={game.bannerUrl} alt="" loading="lazy" draggable={false} onLoad={imgLoad} onError={fail(game.bannerUrl)} />
       ) : null}
       {icon ? <img className="cover-gen-icon" src={icon} alt="" draggable={false} /> : <span className="cover-gen-mono">{monogram(game.title)}</span>}
       <span className="cover-gen-title">{game.title}</span>

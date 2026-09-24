@@ -1,4 +1,6 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, shell } from 'electron'
+import { writeFile } from 'fs/promises'
+import os from 'os'
 import { basename } from 'path'
 import type { LaunchOptions, MainEvent, ManualGameInput, ScanResult, Settings } from '@shared/types'
 import {
@@ -13,6 +15,9 @@ import {
   recentSessions,
   removeGame,
   removeNotGames,
+  lastResume,
+  profileStats,
+  setCompleted,
   toggleFavorite,
   unlockedAchievements,
   updateSource
@@ -26,6 +31,12 @@ import { windowState } from './window'
 import { syncSteamAchievements } from './achievements'
 import { monitor } from './monitor'
 import { closeHeavyProcesses, launcherMemory } from './perfmode'
+import { activeProfileId, createProfile, getProfile, listProfiles, needsPick, pickImage, removeProfile, selectProfile, updateProfile } from './profiles'
+import { communityFor } from './community'
+import { friendLibrary, listFriends, myLibrary, tagsFor } from './steamWeb'
+import { startEnrichment } from './enrich'
+import { pruneResume, resumeEnded, resumeStarted } from './resume'
+import { testAchievementPopup, unwatchAchievements, watchAchievements } from './notifier'
 
 export interface WindowHost {
   getWindow(): BrowserWindow | null
@@ -60,6 +71,10 @@ export function scanLibraries(): Promise<ScanResult> {
       updateSource({ platform: p, count: r.games.length, lastScan: Date.now(), detail: r.detail, ok: r.ok })
     }
     await syncSteamAchievements().catch(() => 0)
+    startEnrichment(
+      (done, total) => broadcast({ type: 'enrich:progress', done, total }),
+      () => broadcast({ type: 'games:changed' })
+    )
     const result: ScanResult = { sources: listSources(), added, updated, removed, durationMs: Date.now() - t0 }
     broadcast({ type: 'scan:finished', result })
     return result
@@ -92,6 +107,7 @@ export function registerIpc(host: WindowHost, onSettings: (s: Settings) => void)
     return installGame(g)
   })
   ipcMain.handle('games:toggleFavorite', (_e, id: number) => toggleFavorite(id))
+  ipcMain.handle('games:setCompleted', (_e, id: number, v: boolean) => setCompleted(id, v))
   ipcMain.handle('games:remove', (_e, id: number) => {
     removeGame(id)
   })
@@ -128,11 +144,36 @@ export function registerIpc(host: WindowHost, onSettings: (s: Settings) => void)
     }
     return { path, title: prettyTitle(basename(path).replace(/\.(exe|lnk|bat|cmd)$/i, '')) }
   })
-  ipcMain.handle('games:sessions', (_e, id: number, limit?: number) => listSessions(id, limit))
-  ipcMain.handle('games:recentSessions', (_e, limit?: number) => recentSessions(limit))
+  ipcMain.handle('games:sessions', (_e, id: number, limit?: number) => listSessions(id, limit ?? 20, activeProfileId()))
+  ipcMain.handle('games:recentSessions', (_e, limit?: number) => recentSessions(limit ?? 12, activeProfileId()))
+  ipcMain.handle('games:resume', (_e, id: number) => lastResume(id, activeProfileId()))
+  ipcMain.handle('games:community', (_e, id: number) => communityFor(id))
   ipcMain.handle('games:sources', () => listSources())
 
-  ipcMain.handle('timeline:data', () => ({ sessions: allSessions(), achievements: unlockedAchievements() }))
+  ipcMain.handle('timeline:data', () => ({ sessions: allSessions(activeProfileId()), achievements: unlockedAchievements() }))
+
+  ipcMain.handle('profiles:list', () => listProfiles())
+  ipcMain.handle('profiles:needsPick', () => needsPick())
+  ipcMain.handle('profiles:active', () => {
+    const id = activeProfileId()
+    return id == null ? null : getProfile(id)
+  })
+  ipcMain.handle('profiles:select', (_e, id: number) => {
+    selectProfile(id)
+    const s = loadSettings()
+    onSettings(s)
+    return s
+  })
+  ipcMain.handle('profiles:create', (_e, nickname: string) => createProfile(nickname))
+  ipcMain.handle('profiles:update', (_e, id: number, patch: Parameters<typeof updateProfile>[1]) => updateProfile(id, patch))
+  ipcMain.handle('profiles:remove', (_e, id: number) => removeProfile(id))
+  ipcMain.handle('profiles:stats', (_e, id: number) => profileStats(id, !!getProfile(id)?.steamLinked))
+  ipcMain.handle('profiles:pickImage', (_e, kind: 'avatar' | 'banner') => pickImage(getWindow(), kind))
+
+  ipcMain.handle('friends:list', () => listFriends())
+  ipcMain.handle('friends:library', (_e, id: string) => friendLibrary(id))
+  ipcMain.handle('friends:myLibrary', () => myLibrary())
+  ipcMain.handle('tags:for', (_e, appids: string[]) => tagsFor(appids))
 
   // Monitor: cada tela aberta conta como um "observador"; a janela destruída libera os seus.
   const watching = new WeakMap<Electron.WebContents, number>()
@@ -182,19 +223,48 @@ export function registerIpc(host: WindowHost, onSettings: (s: Settings) => void)
 
   ipcMain.handle('shell:openPath', (_e, p: string) => shell.openPath(p).then(() => undefined))
   ipcMain.on('shell:showInFolder', (_e, p: string) => shell.showItemInFolder(p))
+  ipcMain.on('shell:openExternal', (_e, url: string) => {
+    if (/^https:\/\//i.test(url)) void shell.openExternal(url)
+  })
+  ipcMain.handle('shell:saveImage', async (_e, dataUrl: string, name: string) => {
+    const win = getWindow()
+    const opts: Electron.SaveDialogOptions = {
+      title: 'Salvar imagem',
+      defaultPath: name.replace(/[\\/:*?"<>|]+/g, '') + '.png',
+      filters: [{ name: 'PNG', extensions: ['png'] }]
+    }
+    const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
+    if (r.canceled || !r.filePath) return false
+    await writeFile(r.filePath, Buffer.from(dataUrl.split(',')[1] ?? '', 'base64'))
+    return true
+  })
+  ipcMain.on('shell:copyImage', (_e, dataUrl: string) => {
+    const png = new Blob([Buffer.from(dataUrl.split(',')[1] ?? '', 'base64')], { type: 'image/png' })
+    void clipboard.write([new ClipboardItem({ 'image/png': png })]).catch(() => undefined)
+  })
+  ipcMain.on('achievement:test', () => testAchievementPopup())
+  ipcMain.handle('app:system', () => ({ ramGb: Math.round(os.totalmem() / 1024 ** 3) }))
 
   ipcMain.handle('app:version', () => ({ app: app.getVersion(), electron: process.versions.electron, node: process.versions.node }))
   ipcMain.handle('app:memory', () => launcherMemory())
 
   onSession((ev) => {
-    if (ev.type === 'started') broadcast({ type: 'session:started', gameId: ev.gameId })
-    else {
-      // Conquistas da sessão que acabou de terminar aparecem na Timeline.
-      void syncSteamAchievements([ev.gameId]).finally(() => {
+    if (ev.type === 'started') {
+      broadcast({ type: 'session:started', gameId: ev.gameId })
+      resumeStarted(ev.sessionId)
+      void syncSteamAchievements([ev.gameId]).finally(() =>
+        watchAchievements(ev.game, (achievement) => broadcast({ type: 'achievement:unlocked', achievement, gameTitle: ev.game.title }))
+      )
+    } else {
+      unwatchAchievements(ev.gameId)
+      // Conquistas e screenshot da sessão que acabou de terminar: Timeline e Smart Resume.
+      void Promise.all([syncSteamAchievements([ev.gameId]).catch(() => 0), resumeEnded(ev.sessionId, ev.game, ev.startedAt)]).finally(() => {
         broadcast({ type: 'session:ended', gameId: ev.gameId, durationSeconds: ev.durationSeconds })
       })
     }
   })
+
+  pruneResume()
 }
 
 async function extractIcon(exePath: string): Promise<string | null> {

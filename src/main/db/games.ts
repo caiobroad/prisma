@@ -1,4 +1,4 @@
-import type { Achievement, Game, Platform, Session, SourceStatus } from '@shared/types'
+import type { Achievement, Game, Platform, ProfileStats, Session, SourceStatus } from '@shared/types'
 import { getDb, transaction } from './index'
 import type { DetectedGame } from '../scanners/types'
 
@@ -32,17 +32,31 @@ interface GameRow {
   install_size: number | null
   trailer_url: string | null
   steam_ref: string | null
+  tags: string | null
+  franchise: string | null
+  review_pct: number | null
+  review_label: string | null
+  review_count: number | null
+  metacritic: number | null
+  min_requirements: string | null
+  min_ram_gb: number | null
+  completed: number
 }
 
 const num = (v: number | null | undefined): number | null => (v == null ? null : Number(v))
 
-function toGame(r: GameRow, ach?: { u: number; t: number }): Game {
-  let genres: string[] = []
+function parseList(v: string | null): string[] {
+  if (!v) return []
   try {
-    genres = r.genres ? (JSON.parse(r.genres) as string[]) : []
+    const a = JSON.parse(v) as unknown
+    return Array.isArray(a) ? (a as string[]) : []
   } catch {
-    genres = []
+    return []
   }
+}
+
+function toGame(r: GameRow, ach?: { u: number; t: number }): Game {
+  const genres = parseList(r.genres)
   return {
     id: Number(r.id),
     title: r.title,
@@ -72,7 +86,17 @@ function toGame(r: GameRow, ach?: { u: number; t: number }): Game {
     zoneColor: r.zone_color,
     trailerUrl: r.trailer_url,
     achievementsUnlocked: ach?.u ?? 0,
-    achievementsTotal: ach?.t ?? 0
+    achievementsTotal: ach?.t ?? 0,
+    tags: parseList(r.tags),
+    franchise: r.franchise,
+    reviewPct: num(r.review_pct),
+    reviewLabel: r.review_label,
+    reviewCount: num(r.review_count),
+    metacritic: num(r.metacritic),
+    minRequirements: r.min_requirements,
+    minRamGb: num(r.min_ram_gb),
+    // Concluído: marcado pelo usuário, ou todas as conquistas desbloqueadas.
+    completed: Number(r.completed) === 1 || (!!ach && ach.t > 0 && ach.u >= ach.t)
   }
 }
 
@@ -128,6 +152,9 @@ export function saveDetails(
     releaseDate?: number | null
     trailerUrl?: string | null
     steamRef?: string | null
+    minRequirements?: string | null
+    minRamGb?: number | null
+    metacritic?: number | null
   }
 ): void {
   getDb()
@@ -140,6 +167,9 @@ export function saveDetails(
          release_date = COALESCE(release_date, ?),
          trailer_url = COALESCE(?, trailer_url),
          steam_ref = COALESCE(?, steam_ref),
+         min_requirements = COALESCE(?, min_requirements),
+         min_ram_gb = COALESCE(?, min_ram_gb),
+         metacritic = COALESCE(?, metacritic),
          details_fetched = 1
        WHERE id = ?`
     )
@@ -152,6 +182,9 @@ export function saveDetails(
       d.releaseDate ?? null,
       d.trailerUrl ?? null,
       d.steamRef ?? null,
+      d.minRequirements ?? null,
+      d.minRamGb ?? null,
+      d.metacritic ?? null,
       id
     )
 }
@@ -196,8 +229,8 @@ export function mergeScan(platform: Platform, detected: DetectedGame[]): { added
   const upsert = db.prepare(
     `INSERT INTO games (title, platform, platform_id, install_dir, exe_path, launch_uri, cover_url, banner_url, logo_url, icon_url,
                         developer, publisher, release_date, genres, description, platform_playtime_sec, platform_last_played,
-                        install_size, installed, added_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        install_size, franchise, installed, added_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(platform, platform_id) DO UPDATE SET
        title = excluded.title,
        install_dir = excluded.install_dir,
@@ -215,6 +248,7 @@ export function mergeScan(platform: Platform, detected: DetectedGame[]): { added
        platform_playtime_sec = MAX(excluded.platform_playtime_sec, games.platform_playtime_sec),
        platform_last_played = COALESCE(excluded.platform_last_played, games.platform_last_played),
        install_size = CASE WHEN excluded.installed = 0 THEN NULL ELSE COALESCE(excluded.install_size, games.install_size) END,
+       franchise = COALESCE(excluded.franchise, games.franchise),
        zone_color = CASE WHEN excluded.banner_url IS NOT games.banner_url THEN NULL ELSE games.zone_color END,
        installed = excluded.installed`
   )
@@ -253,6 +287,7 @@ export function mergeScan(platform: Platform, detected: DetectedGame[]): { added
         g.platformPlaytimeSeconds ?? 0,
         g.platformLastPlayed ?? null,
         g.installSize ?? null,
+        g.franchise ?? null,
         g.installed ? 1 : 0,
         Date.now()
       )
@@ -375,17 +410,17 @@ export function unlockedAchievements(): Achievement[] {
   return rows.map(toAch)
 }
 
-// ---------- sessões ----------
+// ---------- sessões (por perfil) ----------
 
-export function startSession(gameId: number): number {
+export function startSession(gameId: number, profileId: number | null): number {
   const db = getDb()
   const now = Date.now()
-  const info = db.prepare('INSERT INTO sessions (game_id, started_at) VALUES (?, ?)').run(gameId, now)
+  const info = db.prepare('INSERT INTO sessions (game_id, profile_id, started_at) VALUES (?, ?, ?)').run(gameId, profileId, now)
   db.prepare('UPDATE games SET last_played = ? WHERE id = ?').run(now, gameId)
   return Number(info.lastInsertRowid)
 }
 
-export function endSession(sessionId: number): { gameId: number; durationSeconds: number } | null {
+export function endSession(sessionId: number): { gameId: number; durationSeconds: number; startedAt: number } | null {
   const db = getDb()
   const s = db.prepare('SELECT game_id, started_at, ended_at FROM sessions WHERE id = ?').get(sessionId) as
     | { game_id: number; started_at: number; ended_at: number | null }
@@ -397,21 +432,26 @@ export function endSession(sessionId: number): { gameId: number; durationSeconds
     db.prepare('UPDATE sessions SET ended_at = ?, duration_sec = ? WHERE id = ?').run(now, duration, sessionId)
     db.prepare('UPDATE games SET playtime_sec = playtime_sec + ?, last_played = ? WHERE id = ?').run(duration, now, s.game_id)
   })
-  return { gameId: Number(s.game_id), durationSeconds: duration }
+  return { gameId: Number(s.game_id), durationSeconds: duration, startedAt: Number(s.started_at) }
 }
 
 export function setSessionPerf(
   sessionId: number,
-  p: { avgFps: number | null; avgCpu: number | null; avgGpu: number | null; maxGpuTemp: number | null }
+  p: { avgFps: number | null; avgCpu: number | null; avgGpu: number | null; maxGpuTemp: number | null; maxCpuTemp: number | null }
 ): void {
   getDb()
-    .prepare('UPDATE sessions SET avg_fps = ?, avg_cpu = ?, avg_gpu = ?, max_gpu_temp = ? WHERE id = ?')
-    .run(p.avgFps, p.avgCpu, p.avgGpu, p.maxGpuTemp, sessionId)
+    .prepare('UPDATE sessions SET avg_fps = ?, avg_cpu = ?, avg_gpu = ?, max_gpu_temp = ?, max_cpu_temp = ? WHERE id = ?')
+    .run(p.avgFps, p.avgCpu, p.avgGpu, p.maxGpuTemp, p.maxCpuTemp, sessionId)
+}
+
+export function setSessionScreenshot(sessionId: number, url: string): void {
+  getDb().prepare('UPDATE sessions SET screenshot = ? WHERE id = ?').run(url, sessionId)
 }
 
 interface SessionRow {
   id: number
   game_id: number
+  profile_id: number | null
   started_at: number
   ended_at: number | null
   duration_sec: number
@@ -419,39 +459,65 @@ interface SessionRow {
   avg_cpu: number | null
   avg_gpu: number | null
   max_gpu_temp: number | null
+  max_cpu_temp: number | null
+  screenshot: string | null
 }
 
 function toSession(r: SessionRow): Session {
   return {
     id: Number(r.id),
     gameId: Number(r.game_id),
+    profileId: num(r.profile_id),
     startedAt: Number(r.started_at),
     endedAt: num(r.ended_at),
     durationSeconds: Number(r.duration_sec),
     avgFps: num(r.avg_fps),
     avgCpu: num(r.avg_cpu),
     avgGpu: num(r.avg_gpu),
-    maxGpuTemp: num(r.max_gpu_temp)
+    maxGpuTemp: num(r.max_gpu_temp),
+    maxCpuTemp: num(r.max_cpu_temp),
+    screenshot: r.screenshot
   }
 }
 
-export function listSessions(gameId: number, limit = 20): Session[] {
+export function listSessions(gameId: number, limit: number, profileId: number | null): Session[] {
   const rows = getDb()
-    .prepare('SELECT * FROM sessions WHERE game_id = ? ORDER BY started_at DESC LIMIT ?')
-    .all(gameId, limit) as unknown as SessionRow[]
+    .prepare('SELECT * FROM sessions WHERE game_id = ? AND (? IS NULL OR profile_id = ?) ORDER BY started_at DESC LIMIT ?')
+    .all(gameId, profileId, profileId, limit) as unknown as SessionRow[]
   return rows.map(toSession)
 }
 
-export function allSessions(): Session[] {
-  const rows = getDb().prepare('SELECT * FROM sessions ORDER BY started_at DESC LIMIT 5000').all() as unknown as SessionRow[]
+export function allSessions(profileId: number | null): Session[] {
+  const rows = getDb()
+    .prepare('SELECT * FROM sessions WHERE (? IS NULL OR profile_id = ?) ORDER BY started_at DESC LIMIT 5000')
+    .all(profileId, profileId) as unknown as SessionRow[]
   return rows.map(toSession)
 }
 
-export function recentSessions(limit = 30): Array<Session & { title: string }> {
+export function recentSessions(limit: number, profileId: number | null): Array<Session & { title: string }> {
   const rows = getDb()
-    .prepare(`SELECT s.*, g.title FROM sessions s JOIN games g ON g.id = s.game_id ORDER BY s.started_at DESC LIMIT ?`)
-    .all(limit) as unknown as Array<SessionRow & { title: string }>
+    .prepare(
+      `SELECT s.*, g.title FROM sessions s JOIN games g ON g.id = s.game_id
+       WHERE (? IS NULL OR s.profile_id = ?) ORDER BY s.started_at DESC LIMIT ?`
+    )
+    .all(profileId, profileId, limit) as unknown as Array<SessionRow & { title: string }>
   return rows.map((r) => ({ ...toSession(r), title: r.title }))
+}
+
+/** Última sessão encerrada do jogo, com as conquistas desbloqueadas durante ela. */
+export function lastResume(gameId: number, profileId: number | null): { session: Session; achievements: Achievement[] } | null {
+  const r = getDb()
+    .prepare(
+      `SELECT * FROM sessions WHERE game_id = ? AND ended_at IS NOT NULL AND duration_sec >= 30
+       AND (? IS NULL OR profile_id = ?) ORDER BY started_at DESC LIMIT 1`
+    )
+    .get(gameId, profileId, profileId) as unknown as SessionRow | undefined
+  if (!r) return null
+  const s = toSession(r)
+  const ach = getDb()
+    .prepare('SELECT * FROM achievements WHERE game_id = ? AND unlocked_at BETWEEN ? AND ? ORDER BY unlocked_at')
+    .all(gameId, s.startedAt - 60_000, (s.endedAt ?? Date.now()) + 5 * 60_000) as unknown as AchRow[]
+  return { session: s, achievements: ach.map(toAch) }
 }
 
 export function closeDanglingSessions(): void {
@@ -459,6 +525,110 @@ export function closeDanglingSessions(): void {
   for (const s of open) endSession(Number(s.id))
 }
 
+/** Sessões antigas (antes dos perfis) passam a ser do primeiro perfil. */
+export function adoptOrphanSessions(profileId: number): void {
+  getDb().prepare('UPDATE sessions SET profile_id = ? WHERE profile_id IS NULL').run(profileId)
+}
+
+export function profileStats(profileId: number, includePlatform: boolean, top = 12): ProfileStats {
+  const db = getDb()
+  const s = db
+    .prepare(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(duration_sec), 0) AS secs, COALESCE(MAX(duration_sec), 0) AS longest,
+              COUNT(DISTINCT game_id) AS games FROM sessions WHERE profile_id = ? AND ended_at IS NOT NULL`
+    )
+    .get(profileId) as { n: number; secs: number; longest: number; games: number }
+  const perGame = db
+    .prepare('SELECT game_id AS g, SUM(duration_sec) AS secs FROM sessions WHERE profile_id = ? AND ended_at IS NOT NULL GROUP BY game_id')
+    .all(profileId) as unknown as Array<{ g: number; secs: number }>
+  const totals = new Map<number, number>(perGame.map((r) => [Number(r.g), Number(r.secs)]))
+  let achievements = 0
+  if (includePlatform) {
+    // O dono da conta Steam desta máquina herda o tempo registrado pelas lojas.
+    const plat = db.prepare('SELECT id, platform_playtime_sec AS p FROM games WHERE platform_playtime_sec > 0').all() as unknown as Array<{ id: number; p: number }>
+    for (const r of plat) totals.set(Number(r.id), (totals.get(Number(r.id)) ?? 0) + Number(r.p))
+    achievements = Number((db.prepare('SELECT COUNT(*) AS n FROM achievements WHERE unlocked_at IS NOT NULL').get() as { n: number }).n)
+  }
+  const topGames = [...totals.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, top)
+    .map(([gameId, seconds]) => ({ gameId, seconds }))
+  const seconds = [...totals.values()].reduce((a, b) => a + b, 0)
+  return {
+    profileId,
+    hours: seconds / 3600,
+    sessions: Number(s.n),
+    gamesPlayed: totals.size,
+    longestSessionSeconds: Number(s.longest),
+    achievements,
+    topGames
+  }
+}
+
+// ---------- dados da loja ----------
+
+export function setCompleted(id: number, completed: boolean): Game {
+  getDb().prepare('UPDATE games SET completed = ? WHERE id = ?').run(completed ? 1 : 0, id)
+  return getGame(id)!
+}
+
+/** Jogos com appid da Steam conhecido (próprio ou encontrado pelo título) que ainda não têm tags/avaliação. */
+export function gamesNeedingStore(): Array<{ id: number; appid: string }> {
+  const rows = getDb()
+    .prepare(
+      `SELECT id, CASE WHEN platform = 'steam' THEN platform_id ELSE steam_ref END AS appid FROM games
+       WHERE store_fetched = 0 AND (platform = 'steam' OR (steam_ref IS NOT NULL AND steam_ref <> ''))`
+    )
+    .all() as unknown as Array<{ id: number; appid: string }>
+  return rows.map((r) => ({ id: Number(r.id), appid: String(r.appid) }))
+}
+
+export function gamesNeedingDetails(): number[] {
+  const rows = getDb().prepare("SELECT id FROM games WHERE details_fetched = 0 AND platform <> 'manual' ORDER BY installed DESC, last_played DESC").all() as unknown as Array<{ id: number }>
+  return rows.map((r) => Number(r.id))
+}
+
+export function saveStoreData(
+  id: number,
+  d: { tags: string[]; reviewPct: number | null; reviewLabel: string | null; reviewCount: number | null; releaseDate: number | null }
+): void {
+  getDb()
+    .prepare(
+      `UPDATE games SET tags = ?, review_pct = ?, review_label = ?, review_count = ?,
+       release_date = COALESCE(release_date, ?), store_fetched = 1 WHERE id = ?`
+    )
+    .run(d.tags.length ? JSON.stringify(d.tags) : null, d.reviewPct, d.reviewLabel, d.reviewCount, d.releaseDate, id)
+}
+
+export function markStoreFetched(id: number): void {
+  getDb().prepare('UPDATE games SET store_fetched = 1 WHERE id = ?').run(id)
+}
+
+export function steamAppIdFor(id: number): string | null {
+  const r = getDb().prepare('SELECT platform, platform_id, steam_ref FROM games WHERE id = ?').get(id) as
+    | { platform: string; platform_id: string; steam_ref: string | null }
+    | undefined
+  if (!r) return null
+  if (r.platform === 'steam') return r.platform_id
+  return r.steam_ref || null
+}
+
+export function cachedTags(appids: string[]): Record<string, string[]> {
+  const out: Record<string, string[]> = {}
+  if (!appids.length) return out
+  const stmt = getDb().prepare('SELECT tags FROM app_tags WHERE appid = ?')
+  for (const a of appids) {
+    const r = stmt.get(a) as { tags: string } | undefined
+    if (r) out[a] = parseList(r.tags)
+  }
+  return out
+}
+
+export function saveTags(appid: string, tags: string[]): void {
+  getDb()
+    .prepare('INSERT INTO app_tags (appid, tags, fetched_at) VALUES (?, ?, ?) ON CONFLICT(appid) DO UPDATE SET tags = excluded.tags, fetched_at = excluded.fetched_at')
+    .run(appid, JSON.stringify(tags), Date.now())
+}
 // ---------- settings ----------
 
 export function getSetting(key: string): string | null {

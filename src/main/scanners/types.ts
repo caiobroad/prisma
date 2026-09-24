@@ -20,6 +20,7 @@ export interface DetectedGame {
   platformPlaytimeSeconds?: number
   platformLastPlayed?: number | null
   installSize?: number | null
+  franchise?: string | null
   installed: boolean
 }
 

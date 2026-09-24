@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { Game, MainEvent, PerfSample, ScanResult, Settings, SourceStatus, WindowState } from '@shared/types'
+import type { Game, MainEvent, PerfSample, Profile, ScanResult, Settings, SourceStatus, WindowState } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 
 /**
@@ -32,6 +32,14 @@ export interface State {
   focused: boolean
   /** Fluxo de "Jogar": Performance Center, animação de saída, jogo aberto e retorno. */
   launch: { game: Game | null; phase: 'center' | 'out' | 'playing' | 'return' } | null
+  /** Perfil ativo; null até a escolha na tela de perfis. */
+  profile: Profile | null
+  profiles: Profile[]
+  /** Mostrar a tela "Quem está jogando?" (a cada abertura do app). */
+  pickingProfile: boolean
+  ramGb: number
+  /** Enriquecimento da biblioteca em segundo plano (tags, requisitos, avaliações). */
+  enrich: { done: number; total: number } | null
 }
 
 let state: State = {
@@ -49,7 +57,12 @@ let state: State = {
   gameActive: false,
   background: false,
   focused: true,
-  launch: null
+  launch: null,
+  profile: null,
+  profiles: [],
+  pickingProfile: false,
+  ramGb: 0,
+  enrich: null
 }
 
 const listeners = new Set<() => void>()
@@ -189,6 +202,43 @@ export async function addManual(title: string, exePath: string): Promise<Game> {
   return g
 }
 
+export async function setCompleted(g: Game, completed: boolean): Promise<void> {
+  const updated = await window.nexus.games.setCompleted(g.id, completed)
+  replaceGame(updated)
+  toast(completed ? `${g.title} marcado como concluído` : `${g.title} desmarcado como concluído`)
+}
+
+// ---------- perfis ----------
+
+export async function refreshProfiles(): Promise<void> {
+  const [profiles, profile] = await Promise.all([window.nexus.profiles.list(), window.nexus.profiles.active()])
+  setState({ profiles, profile: state.pickingProfile ? state.profile : profile })
+}
+
+/** Entra com um perfil: os ajustes, sessões e estatísticas passam a ser dele. */
+export async function selectProfile(id: number): Promise<void> {
+  const settings = await window.nexus.profiles.select(id)
+  const [profiles, profile] = await Promise.all([window.nexus.profiles.list(), window.nexus.profiles.active()])
+  setState({ settings, profiles, profile, pickingProfile: false })
+}
+
+export function switchProfile(): void {
+  void refreshProfiles().then(() => setState({ pickingProfile: true }))
+}
+
+export async function saveProfile(id: number, patch: Parameters<typeof window.nexus.profiles.update>[1]): Promise<void> {
+  const p = await window.nexus.profiles.update(id, patch)
+  setState({ profiles: state.profiles.map((x) => (x.id === p.id ? p : x)), profile: state.profile?.id === p.id ? p : state.profile })
+}
+
+/** Guarda a busca no histórico do perfil (8 mais recentes, sem repetição). */
+export function rememberSearch(q: string): void {
+  const t = q.trim()
+  if (t.length < 2) return
+  const hist = [t, ...state.settings.searchHistory.filter((h) => h.toLowerCase() !== t.toLowerCase())].slice(0, 8)
+  void updateSettings({ searchHistory: hist })
+}
+
 export async function updateSettings(patch: Partial<Settings>): Promise<void> {
   setState({ settings: { ...state.settings, ...patch } })
   const s = await window.nexus.settings.set(patch)
@@ -210,6 +260,11 @@ export function initStore(): void {
   }
   void refresh()
   void window.nexus.settings.get().then((settings) => setState({ settings }))
+  void window.nexus.system().then(({ ramGb }) => setState({ ramGb }))
+  // A cada abertura do app pergunta quem está jogando (a janela recriada depois de um jogo, não).
+  void Promise.all([window.nexus.profiles.list(), window.nexus.profiles.active(), window.nexus.profiles.needsPick()]).then(
+    ([profiles, profile, needsPick]) => setState({ profiles, profile, pickingProfile: needsPick })
+  )
   void window.nexus.window.state().then((win) => setState({ win }))
   window.nexus.on((ev: MainEvent) => {
     switch (ev.type) {
@@ -246,6 +301,13 @@ export function initStore(): void {
         break
       case 'perf:closed':
         toast(`Modo Performance fechou: ${ev.names.join(', ')}`)
+        break
+      case 'achievement:unlocked':
+        // A notificação por cima do jogo é do processo principal; aqui só atualiza contadores.
+        if (document.hasFocus()) toast(`Conquista desbloqueada: ${ev.achievement.name}`)
+        break
+      case 'enrich:progress':
+        setState({ enrich: ev.done >= ev.total ? null : { done: ev.done, total: ev.total } })
         break
     }
   })

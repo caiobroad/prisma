@@ -15,11 +15,12 @@ interface Props {
   onHover?: (g: Game | null) => void
 }
 
-const TRAILER_DELAY = 1000
+const TRAILER_DELAY = 800
 
 /**
  * Capa da biblioteca. Hover: inclinação 3D que segue o cursor, zoom, brilho e sombra
- * que se desloca para o lado oposto da inclinação. Após ~1 s parado, vira trailer silencioso;
+ * que se desloca para o lado oposto da inclinação. Após 0,8 s parado (ou em foco pelo teclado/controle),
+ * vira trailer silencioso;
  * ao sair, volta para a capa na hora (o vídeo é destruído, não pausado).
  */
 export const GameCard = memo(function GameCard({ game, vtKey, isHero, onOpen, onHover }: Props) {
@@ -36,6 +37,12 @@ export const GameCard = memo(function GameCard({ game, vtKey, isHero, onOpen, on
     },
     []
   )
+
+  // Janela perdeu o foco (Alt+Tab com a capa focada pelo teclado): o trailer para na hora.
+  const windowFocused = useStore((s) => s.focused)
+  useEffect(() => {
+    if (!windowFocused && trailer) setTrailer(null)
+  }, [windowFocused, trailer])
 
   const enter = (): void => {
     hovering.current = true
@@ -94,8 +101,8 @@ export const GameCard = memo(function GameCard({ game, vtKey, isHero, onOpen, on
       onPointerEnter={enter}
       onPointerMove={move}
       onPointerLeave={leave}
-      onFocus={() => onHover?.(game)}
-      onBlur={() => onHover?.(null)}
+      onFocus={() => (document.documentElement.dataset.nav === 'keys' ? enter() : onHover?.(game))}
+      onBlur={leave}
     >
       <div className="gcard-tilt" ref={tilt} style={isHero ? { viewTransitionName: 'game-hero' } : undefined}>
         <GameCover game={game} />

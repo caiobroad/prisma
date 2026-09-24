@@ -1,33 +1,24 @@
-import { memo, useEffect, useRef } from 'react'
-import {
-  IconBack,
-  IconExitFullscreen,
-  IconFullscreen,
-  IconGamepad,
-  IconGauge,
-  IconMoon,
-  IconRefresh,
-  IconSearch,
-  IconSun,
-  IconWinClose,
-  IconWinMax,
-  IconWinMin,
-  IconWinRestore
-} from './Icons'
+import { memo } from 'react'
+import type { Game } from '@shared/types'
+import { IconBack, IconExitFullscreen, IconFullscreen, IconGamepad, IconGauge, IconRefresh, IconWinClose, IconWinMax, IconWinMin, IconWinRestore } from './Icons'
+import { Avatar } from './Avatar'
+import { MoodPicker } from './MoodPicker'
+import { SearchBox } from './SearchBox'
 import { scan, updateSettings, useStore } from '../lib/store'
 
 interface Props {
   query: string
   onQuery: (q: string) => void
+  onOpenGame: (g: Game) => void
   canBack: boolean
   onBack: () => void
   zoneName: string | null
-  dark: boolean
   onController: () => void
+  onProfile: () => void
 }
 
 /** Marca do Prisma: o prisma com o feixe de luz. As faces seguem o acento da zona. */
-function PrismaMark() {
+export function PrismaMark() {
   return (
     <svg className="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
       <line x1="7" y1="37" x2="23" y2="32" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" />
@@ -40,30 +31,14 @@ function PrismaMark() {
   )
 }
 
-export const TitleBar = memo(function TitleBar({ query, onQuery, canBack, onBack, zoneName, dark, onController }: Props) {
-  const ref = useRef<HTMLInputElement>(null)
+export const TitleBar = memo(function TitleBar({ query, onQuery, onOpenGame, canBack, onBack, zoneName, onController, onProfile }: Props) {
   const scanning = useStore((s) => s.scanning)
   const win = useStore((s) => s.win)
   const perfMode = useStore((s) => s.settings.performanceMode)
   const zoneOn = useStore((s) => s.settings.zoneMode)
+  const profile = useStore((s) => s.profile)
+  const enrich = useStore((s) => s.enrich)
   const status = useStore((s) => (s.scanning ? 'syncing' : s.running.size > 0 ? 'playing' : 'online'))
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault()
-        ref.current?.focus()
-        ref.current?.select()
-      }
-      if (e.key === 'Escape' && document.activeElement === ref.current) {
-        onQuery('')
-        ref.current?.blur()
-        e.stopPropagation()
-      }
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [onQuery])
 
   return (
     <header className="titlebar" onDoubleClick={(e) => e.target === e.currentTarget && window.nexus.window.toggleMaximize()}>
@@ -76,21 +51,7 @@ export const TitleBar = memo(function TitleBar({ query, onQuery, canBack, onBack
           <IconBack width={16} height={16} />
         </button>
       </div>
-      <label className="search">
-        <IconSearch width={15} height={15} />
-        <input
-          id="search"
-          ref={ref}
-          type="search"
-          placeholder="Buscar na biblioteca"
-          autoComplete="off"
-          spellCheck={false}
-          value={query}
-          onChange={(e) => onQuery(e.target.value)}
-          aria-label="Buscar na biblioteca"
-        />
-        <kbd>Ctrl K</kbd>
-      </label>
+      <SearchBox query={query} onQuery={onQuery} onOpenGame={onOpenGame} />
       <div className="tb-right">
         {zoneOn && zoneName ? (
           <span className="zone-chip" title="Modo Zona: a atmosfera segue o jogo selecionado">
@@ -110,13 +71,26 @@ export const TitleBar = memo(function TitleBar({ query, onQuery, canBack, onBack
         <button className="tb-icon" onClick={onController} aria-label="Modo Controle" title="Modo Controle (Start / Options no controle)">
           <IconGamepad width={17} height={17} />
         </button>
-        <button className="tb-icon" onClick={() => void updateSettings({ theme: dark ? 'light' : 'dark' })} aria-label={dark ? 'Modo claro' : 'Modo escuro'} title={dark ? 'Modo claro' : 'Modo escuro'}>
-          {dark ? <IconSun width={16} height={16} /> : <IconMoon width={16} height={16} />}
-        </button>
-        <button className={`tb-icon ${scanning ? 'spin' : ''}`} onClick={() => void scan()} disabled={scanning} aria-label="Sincronizar bibliotecas" title="Sincronizar bibliotecas (F5)">
+        <MoodPicker />
+        <button
+          className={`tb-icon ${scanning ? 'spin' : ''}`}
+          onClick={() => void scan()}
+          disabled={scanning}
+          aria-label="Sincronizar bibliotecas"
+          title={enrich ? `Completando a biblioteca: ${enrich.done} de ${enrich.total} jogos` : 'Sincronizar bibliotecas (F5)'}
+        >
           <IconRefresh width={16} height={16} />
         </button>
-        <span className={`status-dot ${status}`} title={status === 'playing' ? 'Em jogo' : status === 'syncing' ? 'Sincronizando' : 'Online'} />
+        {profile ? (
+          <button
+            className={`tb-profile st-${status}`}
+            onClick={onProfile}
+            title={`${profile.nickname} · ${status === 'playing' ? 'em jogo' : status === 'syncing' ? 'sincronizando' : 'online'} · abrir perfil`}
+            aria-label={`Perfil de ${profile.nickname}`}
+          >
+            <Avatar src={profile.avatar} name={profile.nickname} size={28} />
+          </button>
+        ) : null}
         <div className="winctl">
           <button onClick={() => window.nexus.window.minimize()} aria-label="Minimizar" title="Minimizar">
             <IconWinMin width={11} height={11} />

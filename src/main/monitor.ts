@@ -25,6 +25,7 @@ interface GameTrack {
   fps: number
   fpsN: number
   maxGpuTemp: number | null
+  maxCpuTemp: number | null
 }
 
 const NVSMI = ['C:\\Windows\\System32\\nvidia-smi.exe', 'C:\\Program Files\\NVIDIA Corporation\\NVSMI\\nvidia-smi.exe']
@@ -88,7 +89,7 @@ class Monitor {
   }
 
   gameStarted(sessionId: number, pid: number | null): void {
-    this.game = { sessionId, pid, n: 0, cpu: 0, gpu: 0, gpuN: 0, fps: 0, fpsN: 0, maxGpuTemp: null }
+    this.game = { sessionId, pid, n: 0, cpu: 0, gpu: 0, gpuN: 0, fps: 0, fpsN: 0, maxGpuTemp: null, maxCpuTemp: null }
     this.reconfigure()
     if (pid) this.startPresentMon(pid)
   }
@@ -108,7 +109,8 @@ class Monitor {
         avgCpu: round(g.cpu / g.n),
         avgGpu: g.gpuN ? round(g.gpu / g.gpuN) : null,
         avgFps: g.fpsN ? round(g.fps / g.fpsN) : null,
-        maxGpuTemp: g.maxGpuTemp
+        maxGpuTemp: g.maxGpuTemp,
+        maxCpuTemp: g.maxCpuTemp
       })
     }
     this.game = null
@@ -186,6 +188,7 @@ class Monitor {
         g.fpsN++
       }
       if (s.gpuTemp != null) g.maxGpuTemp = Math.max(g.maxGpuTemp ?? 0, s.gpuTemp)
+      if (s.cpuTemp != null) g.maxCpuTemp = Math.max(g.maxCpuTemp ?? 0, s.cpuTemp)
     }
     for (const l of this.listeners) l(s)
   }

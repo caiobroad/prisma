@@ -243,11 +243,13 @@ export const steamScanner: Scanner = {
 
       let developer: string | null = null
       let publisher: string | null = null
+      let franchise: string | null = null
       for (const a of Object.values(kvObj(common?.associations) ?? {})) {
         const o = kvObj(a)
         if (!o) continue
         if (o.type === 'developer' && !developer) developer = kvStr(o.name) ?? null
         if (o.type === 'publisher' && !publisher) publisher = kvStr(o.name) ?? null
+        if (o.type === 'franchise' && !franchise) franchise = kvStr(o.name) ?? null
       }
       const ext = kvObj(app?.extended)
       developer ??= kvStr(ext?.developer) ?? null
@@ -278,6 +280,7 @@ export const steamScanner: Scanner = {
         platformPlaytimeSeconds: (stats?.playtimeMin ?? 0) * 60,
         platformLastPlayed: stats?.lastPlayed ? stats.lastPlayed * 1000 : null,
         installSize: inst?.installed ? inst.size : null,
+        franchise,
         installed: inst?.installed ?? false
       })
     }

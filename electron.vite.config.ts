@@ -17,6 +17,8 @@ export default defineConfig({
   },
   renderer: {
     plugins: [react()],
+    // Minificado: menos para o V8 analisar a cada abertura (e a cada janela recriada após hibernar).
+    build: { minify: 'esbuild', cssMinify: true },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),

@@ -104,7 +104,7 @@ app.whenReady().then(() => {
   app.setAppUserModelId('app.prisma.launcher')
 
   protocol.handle('cover', (req) => {
-    const p = decodeURIComponent(req.url.replace(/^cover:\/\/(local\/)?/, ''))
+    const p = decodeURIComponent(req.url.replace(/^cover:\/\/(local\/)?/, '').replace(/\?.*$/, ''))
     return net.fetch(pathToFileURL(p).toString())
   })
 

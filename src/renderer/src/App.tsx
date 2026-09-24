@@ -1,57 +1,65 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import type { Game, Platform } from '@shared/types'
+import type { Friend, Game, Platform } from '@shared/types'
 import { TitleBar } from './components/TitleBar'
-import { Sidebar, type Section } from './components/Sidebar'
+import { SECTION_ORDER, Sidebar, type Section } from './components/Sidebar'
 import { Toast } from './components/Toast'
 import { AddGameSheet } from './components/AddGameSheet'
 import { ZoneBackdrop } from './components/ZoneBackdrop'
 import { PerformanceCenter } from './components/PerformanceCenter'
 import { LaunchCinematic } from './components/LaunchCinematic'
 import { IdleShowcase } from './components/IdleShowcase'
-import { ControllerMode } from './components/ControllerMode'
+import { ProfileSelect } from './components/ProfileSelect'
 import { HomeView, pickFeatured } from './views/HomeView'
 import { LibraryView } from './views/LibraryView'
 import { RecentView } from './views/RecentView'
 import { FavoritesView } from './views/FavoritesView'
-import { SettingsView } from './views/SettingsView'
-import { TimelineView } from './views/TimelineView'
-import { PerformanceView } from './views/PerformanceView'
 import { GamePage } from './views/GamePage'
-import { NEXUS_ZONE, presetFor, zoneFor, zoneStyle } from './lib/zones'
+import { moodZone, presetFor, zoneFor, zoneStyle } from './lib/zones'
 import { getState, initStore, scan, toast, useStore } from './lib/store'
-import { useGamepad, useIdle } from './lib/input'
+import { useGamepad, useIdle, type PadAction } from './lib/input'
+import { activateFocused, setNavMode, spatialMove } from './lib/nav'
+import { rumble, sfx } from './lib/sounds'
+
+// Telas pesadas ou pouco visitadas só são baixadas/avaliadas quando abertas.
+const TimelineView = lazy(() => import('./views/TimelineView').then((m) => ({ default: m.TimelineView })))
+const PerformanceView = lazy(() => import('./views/PerformanceView').then((m) => ({ default: m.PerformanceView })))
+const SettingsView = lazy(() => import('./views/SettingsView').then((m) => ({ default: m.SettingsView })))
+const ProfileView = lazy(() => import('./views/ProfileView').then((m) => ({ default: m.ProfileView })))
+const FriendsView = lazy(() => import('./views/FriendsView').then((m) => ({ default: m.FriendsView })))
+const CollectionView = lazy(() => import('./views/CollectionView').then((m) => ({ default: m.CollectionView })))
+const CreditsView = lazy(() => import('./views/CreditsView').then((m) => ({ default: m.CreditsView })))
+const ControllerMode = lazy(() => import('./components/ControllerMode').then((m) => ({ default: m.ControllerMode })))
 
 type DocWithVT = Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void> } }
 const reducedMotion = (): boolean => window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-/** Troca de tela com View Transitions: a capa clicada se expande até virar o banner da página. */
-function transition(update: () => void, after?: () => void): void {
+/**
+ * Toda troca de tela passa por aqui: View Transitions na GPU (a área principal se dissolve
+ * e sobe; a capa clicada vira o banner da página). O sentido (avançar/voltar) muda o movimento.
+ */
+function transition(update: () => void, after?: () => void, dir: 'fwd' | 'back' = 'fwd'): void {
   const doc = document as DocWithVT
-  if (!doc.startViewTransition || reducedMotion() || getState().settings.performanceMode && getState().gameActive) {
+  const s = getState()
+  if (!doc.startViewTransition || reducedMotion() || (s.settings.performanceMode && s.gameActive) || s.background) {
     update()
     after?.()
     return
   }
-  doc.startViewTransition(() => flushSync(update)).finished.finally(() => after?.())
+  document.documentElement.dataset.vt = dir
+  doc
+    .startViewTransition(() => flushSync(update))
+    .finished.finally(() => {
+      delete document.documentElement.dataset.vt
+      after?.()
+    })
 }
 
 initStore()
 
-function useDarkTheme(): boolean {
-  const theme = useStore((s) => s.settings.theme)
-  const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const on = (): void => setSystemDark(mq.matches)
-    mq.addEventListener('change', on)
-    return () => mq.removeEventListener('change', on)
-  }, [])
-  const dark = theme === 'system' ? systemDark : theme === 'dark'
-  useEffect(() => {
-    document.documentElement.dataset.theme = dark ? 'dark' : 'light'
-  }, [dark])
-  return dark
+const isTyping = (): boolean => {
+  const el = document.activeElement as HTMLElement | null
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
 }
 
 export default function App() {
@@ -64,7 +72,8 @@ export default function App() {
   const focused = useStore((s) => s.focused)
   const fullscreen = useStore((s) => s.win.fullscreen)
   const loaded = useStore((s) => s.loaded)
-  const dark = useDarkTheme()
+  const picking = useStore((s) => s.pickingProfile)
+  const profileId = useStore((s) => s.profile?.id ?? null)
 
   const [section, setSection] = useState<Section>('home')
   const [platform, setPlatform] = useState<Platform | 'all'>('all')
@@ -76,6 +85,7 @@ export default function App() {
   const [controller, setController] = useState(false)
   const [padFocus, setPadFocus] = useState<Game | null>(null)
   const [showcaseGame, setShowcaseGame] = useState<Game | null>(null)
+  const [friend, setFriend] = useState<Friend | null>(null)
   const [colors, setColors] = useState<Record<number, string>>({})
   const origin = useRef<string | null>(null)
   const hoverTimer = useRef<number | null>(null)
@@ -86,6 +96,14 @@ export default function App() {
   useEffect(() => {
     document.documentElement.dataset.glass = settings.glassEffect ? 'on' : 'off'
   }, [settings.glassEffect])
+
+  // Outro perfil entrou: volta ao início, sem página aberta.
+  useEffect(() => {
+    setSection('home')
+    setPageId(null)
+    setFriend(null)
+    setQueryState('')
+  }, [profileId])
 
   // ---------- navegação ----------
 
@@ -98,6 +116,11 @@ export default function App() {
     })
   }, [])
 
+  const openFromSearch = useCallback((g: Game) => {
+    origin.current = null
+    transition(() => setPageId(g.id))
+  }, [])
+
   const back = useCallback(() => {
     const key = origin.current
     transition(
@@ -105,7 +128,8 @@ export default function App() {
         setPageId(null)
         setHeroKey(key)
       },
-      () => setHeroKey(null)
+      () => setHeroKey(null),
+      'back'
     )
   }, [])
 
@@ -113,9 +137,45 @@ export default function App() {
     transition(() => {
       setPageId(null)
       setSection(s)
-      if (s === 'library') setPlatform('all')
+      if (s === 'library' || s === 'installed') setPlatform('all')
+      if (s !== 'profile') setFriend(null)
     })
   }, [])
+
+  const openFriend = useCallback((f: Friend) => {
+    transition(() => {
+      setPageId(null)
+      setFriend(f)
+      setSection('profile')
+    })
+  }, [])
+
+  const openProfile = useCallback(() => {
+    transition(() => {
+      setPageId(null)
+      setFriend(null)
+      setSection('profile')
+    })
+  }, [])
+
+  /** L2/R2 (ou Ctrl+↑/↓): tela anterior/seguinte do menu. */
+  const cycleSection = useCallback(
+    (dir: 1 | -1) => {
+      const i = SECTION_ORDER.indexOf(section)
+      const next = SECTION_ORDER[(Math.max(0, i) + dir + SECTION_ORDER.length) % SECTION_ORDER.length]
+      transition(
+        () => {
+          setPageId(null)
+          setFriend(null)
+          setSection(next)
+          if (next === 'library' || next === 'installed') setPlatform('all')
+        },
+        undefined,
+        dir === 1 ? 'fwd' : 'back'
+      )
+    },
+    [section]
+  )
 
   const goPlatform = useCallback((p: Platform | 'all') => {
     transition(() => {
@@ -129,7 +189,7 @@ export default function App() {
     setQueryState(q)
     if (q.trim()) {
       setPageId(null)
-      setSection('library')
+      setSection((s) => (s === 'installed' ? s : 'library'))
     }
   }, [])
 
@@ -139,10 +199,26 @@ export default function App() {
     hoverTimer.current = window.setTimeout(() => setHovered(g), g ? 380 : 250)
   }, [])
 
+  // Voltar: página do jogo → lista; perfil de amigo → amigos.
+  const goBack = useCallback((): boolean => {
+    if (pageId != null) {
+      back()
+      return true
+    }
+    if (section === 'profile' && friend) {
+      transition(() => {
+        setFriend(null)
+        setSection('friends')
+      }, undefined, 'back')
+      return true
+    }
+    return false
+  }, [pageId, section, friend, back])
+
   // ---------- teclado, mouse e controle ----------
 
   useEffect(() => {
-    if (controller) return
+    if (controller || picking) return
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'F11') {
         e.preventDefault()
@@ -151,12 +227,19 @@ export default function App() {
         e.preventDefault()
         void scan()
       } else if (e.key === 'Escape' && !adding && !getState().launch) {
-        if (pageId != null) back()
-        else if (getState().win.fullscreen) window.nexus.window.toggleFullscreen()
-      } else if (e.altKey && e.key === 'ArrowLeft' && pageId != null) back()
+        if (!goBack() && getState().win.fullscreen) window.nexus.window.toggleFullscreen()
+      } else if (e.altKey && e.key === 'ArrowLeft') {
+        goBack()
+      } else if (e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'Tab') && !adding) {
+        e.preventDefault()
+        cycleSection(e.key === 'ArrowUp' || (e.key === 'Tab' && e.shiftKey) ? -1 : 1)
+      } else if (!e.ctrlKey && !e.altKey && !e.metaKey && e.key.startsWith('Arrow') && !isTyping() && !getState().launch) {
+        const dir = e.key.slice(5).toLowerCase() as 'left' | 'right' | 'up' | 'down'
+        if (spatialMove(dir)) e.preventDefault()
+      }
     }
     const onMouse = (e: MouseEvent): void => {
-      if (e.button === 3 && pageId != null) back()
+      if (e.button === 3) goBack()
     }
     window.addEventListener('keydown', onKey)
     window.addEventListener('mouseup', onMouse)
@@ -164,17 +247,40 @@ export default function App() {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('mouseup', onMouse)
     }
-  }, [controller, adding, pageId, back])
+  }, [controller, picking, adding, goBack, cycleSection])
 
-  // Start/Options no controle abre o Modo Controle.
-  useGamepad((a) => {
-    if (a === 'start' && !getState().launch) setController(true)
-  }, !controller)
+  // Fora do Modo Controle o controle também navega: direcional move o foco, A confirma,
+  // B volta, L2/R2 (ou L1/R1) trocam de tela e Start abre o Modo Controle.
+  const onPad = useCallback(
+    (a: PadAction) => {
+      if (getState().launch) return
+      if (a === 'start') {
+        if (!getState().pickingProfile) setController(true)
+        return
+      }
+      if (a === 'left' || a === 'right' || a === 'up' || a === 'down') {
+        if (spatialMove(a)) sfx('move')
+      } else if (a === 'confirm') {
+        if (activateFocused()) {
+          sfx('confirm')
+          rumble('light')
+        }
+      } else if (a === 'back') {
+        if (goBack()) sfx('back')
+      } else if (!getState().pickingProfile && (a === 'lt' || a === 'lb' || a === 'rt' || a === 'rb')) {
+        sfx('tab')
+        setNavMode(true)
+        cycleSection(a === 'lt' || a === 'lb' ? -1 : 1)
+      }
+    },
+    [goBack, cycleSection]
+  )
+  useGamepad(onPad, !controller, { sensitivity: settings.controller.sensitivity })
 
   useEffect(() => {
-    const onPad = (): void => toast('Controle conectado · pressione Start/Options para o Modo Controle')
-    window.addEventListener('gamepadconnected', onPad)
-    return () => window.removeEventListener('gamepadconnected', onPad)
+    const onPadConn = (): void => toast('Controle conectado · direcional navega, Start/Options abre o Modo Controle')
+    window.addEventListener('gamepadconnected', onPadConn)
+    return () => window.removeEventListener('gamepadconnected', onPadConn)
   }, [])
 
   const exitController = useCallback(() => setController(false), [])
@@ -182,13 +288,16 @@ export default function App() {
   // ---------- vitrine ociosa ----------
 
   // Só com o launcher em foco: se você está em outro programa, a vitrine só gastaria recursos.
-  const idleEnabled = settings.idleShowcase && loaded && focused && !adding && !launch && !background && !gameActive && games.length > 0
+  const idleEnabled =
+    settings.idleShowcase && loaded && focused && !adding && !launch && !background && !gameActive && !picking && !controller && games.length > 0
   const [idle] = useIdle(settings.idleSeconds * 1000, idleEnabled)
   const onSlide = useCallback((g: Game | null) => setShowcaseGame(g), [])
 
-  // ---------- Modo Zona ----------
+  // ---------- Mood e Modo Zona ----------
 
-  const zoneGame: Game | null = !settings.zoneMode
+  const base = useMemo(() => moodZone(settings.mood), [settings.mood])
+  const zoneGame: Game | null =
+    !settings.zoneMode || picking
     ? null
     : ((launch && launch.phase !== 'center' ? launch.game : null) ??
       (idle ? showcaseGame : null) ??
@@ -208,7 +317,7 @@ export default function App() {
     }
   }, [zoneGame, colors])
 
-  const zone = useMemo(() => (zoneGame ? zoneFor(zoneGame, zoneGame.zoneColor ?? colors[zoneGame.id] ?? null) : NEXUS_ZONE), [zoneGame, colors])
+  const zone = useMemo(() => (zoneGame ? zoneFor(zoneGame, zoneGame.zoneColor ?? colors[zoneGame.id] ?? null, base) : base), [zoneGame, colors, base])
 
   // Enquanto o jogo roda, o launcher não compete por recursos.
   const lite = gameActive && settings.performanceMode
@@ -221,38 +330,64 @@ export default function App() {
     lite ? 'lite' : '',
     launch && launch.phase !== 'center' ? `stage-${launch.phase}` : '',
     idle ? 'is-idle' : '',
-    controller ? 'is-controller' : ''
+    controller ? 'is-controller' : '',
+    picking ? 'is-picking' : ''
   ].join(' ')
 
   return (
-    <div className={appClass} style={zoneStyle(zone) as React.CSSProperties} data-sheen={zone.sheen > 0.05 ? '1' : '0'}>
-      <ZoneBackdrop zone={zone} particles={settings.zoneParticles && !lite} paused={particlesPaused} lowFps={settings.performanceMode} light={!dark} />
+    <div className={appClass} style={zoneStyle(zone) as React.CSSProperties} data-sheen={zone.sheen > 0.05 ? '1' : '0'} data-mood={settings.mood}>
+      <ZoneBackdrop zone={zone} particles={settings.zoneParticles && !lite} paused={particlesPaused} lowFps={settings.performanceMode} light={false} />
 
-      {controller ? (
-        <ControllerMode onExit={exitController} onFocusGame={setPadFocus} />
+      {picking ? (
+        <ProfileSelect />
+      ) : controller ? (
+        <Suspense fallback={null}>
+          <ControllerMode onExit={exitController} onFocusGame={setPadFocus} />
+        </Suspense>
       ) : (
         <div className="stage">
           <TitleBar
             query={query}
             onQuery={setQuery}
-            canBack={pageId != null}
-            onBack={back}
+            onOpenGame={openFromSearch}
+            canBack={pageId != null || (section === 'profile' && !!friend)}
+            onBack={() => void goBack()}
             zoneName={zoneGame ? zone.name : null}
-            dark={dark}
             onController={() => setController(true)}
+            onProfile={openProfile}
           />
           <Sidebar section={section} onSection={goSection} platform={platform} onPlatform={goPlatform} onAdd={() => setAdding(true)} />
           <main className="main">
             <div className={`section ${page ? 'covered' : ''}`} inert={page ? true : undefined}>
-              {section === 'home' ? <HomeView featured={featured} heroKey={heroKey} onOpen={openGame} onHover={onHover} onGoLibrary={() => goSection('library')} /> : null}
-              {section === 'library' ? (
-                <LibraryView query={query} platform={platform} onPlatform={goPlatform} heroKey={heroKey} onOpen={openGame} onHover={onHover} onAdd={() => setAdding(true)} />
-              ) : null}
-              {section === 'recent' ? <RecentView heroKey={heroKey} onOpen={openGame} onHover={onHover} /> : null}
-              {section === 'favorites' ? <FavoritesView heroKey={heroKey} onOpen={openGame} onHover={onHover} /> : null}
-              {section === 'timeline' ? <TimelineView onOpen={openGame} /> : null}
-              {section === 'performance' ? <PerformanceView /> : null}
-              {section === 'settings' ? <SettingsView /> : null}
+              <Suspense fallback={<div className="view-loading" />}>
+                {section === 'home' ? (
+                  <HomeView featured={featured} heroKey={heroKey} onOpen={openGame} onHover={onHover} onGoLibrary={() => goSection('library')} onGoInstalled={() => goSection('installed')} />
+                ) : null}
+                {section === 'library' || section === 'installed' ? (
+                  <LibraryView
+                    key={section}
+                    query={query}
+                    onQuery={setQuery}
+                    platform={platform}
+                    onPlatform={goPlatform}
+                    heroKey={heroKey}
+                    onOpen={openGame}
+                    onHover={onHover}
+                    onAdd={() => setAdding(true)}
+                    installedOnly={section === 'installed'}
+                    onCollection={() => goSection('collection')}
+                  />
+                ) : null}
+                {section === 'collection' ? <CollectionView heroKey={heroKey} onOpen={openGame} onHover={onHover} onLibrary={() => goSection('library')} /> : null}
+                {section === 'recent' ? <RecentView heroKey={heroKey} onOpen={openGame} onHover={onHover} /> : null}
+                {section === 'favorites' ? <FavoritesView heroKey={heroKey} onOpen={openGame} onHover={onHover} /> : null}
+                {section === 'friends' ? <FriendsView onFriend={openFriend} onSettings={() => goSection('settings')} /> : null}
+                {section === 'profile' ? <ProfileView key={friend?.id ?? 'me'} friend={friend} onFriend={openFriend} onFriends={() => goSection('friends')} /> : null}
+                {section === 'timeline' ? <TimelineView onOpen={openGame} /> : null}
+                {section === 'performance' ? <PerformanceView /> : null}
+                {section === 'settings' ? <SettingsView onCredits={() => goSection('credits')} /> : null}
+                {section === 'credits' ? <CreditsView /> : null}
+              </Suspense>
             </div>
             {page ? <GamePage key={page.id} game={page} onBack={back} /> : null}
           </main>

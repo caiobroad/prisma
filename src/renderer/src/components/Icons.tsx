@@ -154,3 +154,122 @@ export const IconExitFullscreen = (p: P) => (
     <path d="M4.5 1.5v3h-3M10.5 4.5h-3v-3M7.5 10.5v-3h3M1.5 7.5h3v3" />
   </svg>
 )
+export const IconDrive = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="3.5" y="13" width="17" height="6.5" rx="2" />
+    <path d="M5.5 13 8 5.5h8l2.5 7.5" />
+    <path d="M16.5 16.2h.01M13.5 16.2h.01" />
+  </svg>
+)
+export const IconShelf = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M3.5 20h17" />
+    <rect x="5" y="6" width="3.2" height="14" rx="0.8" />
+    <rect x="9.6" y="4" width="3.2" height="16" rx="0.8" />
+    <path d="m15 8.2 3-.8 2.6 12-3 .6z" />
+  </svg>
+)
+export const IconResume = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4 12a8 8 0 1 0 2.4-5.7" />
+    <path d="M4 4v4h4" />
+    <path d="m10.5 9.2 4.2 2.8-4.2 2.8z" />
+  </svg>
+)
+export const IconUsers = (p: P) => (
+  <svg {...base} {...p}>
+    <circle cx="9" cy="8.5" r="3.2" />
+    <path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5" />
+    <path d="M15.5 5.6a3.2 3.2 0 0 1 0 6M17 14.2c1.9.5 3.1 2.1 3.5 4.8" />
+  </svg>
+)
+export const IconUser = (p: P) => (
+  <svg {...base} {...p}>
+    <circle cx="12" cy="8.5" r="3.6" />
+    <path d="M5 20c.8-3.8 3.6-6 7-6s6.2 2.2 7 6" />
+  </svg>
+)
+export const IconHeart = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 19.5s-7.5-4.4-7.5-9.7A4.3 4.3 0 0 1 12 7.1a4.3 4.3 0 0 1 7.5 2.7c0 5.3-7.5 9.7-7.5 9.7z" />
+  </svg>
+)
+export const IconRadar = (p: P) => (
+  <svg {...base} {...p}>
+    <circle cx="12" cy="12" r="8" />
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 12 17.5 6.5" />
+    <circle cx="16" cy="14.5" r="0.9" fill="currentColor" />
+  </svg>
+)
+export const IconTrophy = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M8 20.5h8M12 16.5v4M7 4h10v5a5 5 0 0 1-10 0z" />
+    <path d="M17 5.5h3v1.6a3 3 0 0 1-3 3M7 5.5H4v1.6a3 3 0 0 0 3 3" />
+  </svg>
+)
+export const IconShare = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 4v11M7.5 8.5 12 4l4.5 4.5" />
+    <path d="M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13" />
+  </svg>
+)
+export const IconCopy = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="8.5" y="8.5" width="11" height="11" rx="2.2" />
+    <path d="M15.5 8.5V6A1.5 1.5 0 0 0 14 4.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5" />
+  </svg>
+)
+export const IconCheck = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  </svg>
+)
+export const IconPalette = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M12 3.5a8.5 8.5 0 1 0 0 17c1.4 0 1.9-1 1.4-2.1-.6-1.2.1-2.4 1.5-2.4h1.7a3.9 3.9 0 0 0 3.9-3.9c0-4.8-3.8-8.6-8.5-8.6z" />
+    <circle cx="7.8" cy="11" r="1" fill="currentColor" />
+    <circle cx="10.5" cy="7.4" r="1" fill="currentColor" />
+    <circle cx="15" cy="7.8" r="1" fill="currentColor" />
+  </svg>
+)
+export const IconHistory = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3" />
+    <path d="M4.5 4.5v3.8h3.8M12 8.5V12l2.5 1.6" />
+  </svg>
+)
+export const IconFilter = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4 5.5h16l-6.2 7.3v5.4l-3.6 1.8v-7.2z" />
+  </svg>
+)
+export const IconThermo = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M14 14.8V5a2 2 0 0 0-4 0v9.8a3.8 3.8 0 1 0 4 0z" />
+    <path d="M12 16.5v-6" />
+  </svg>
+)
+export const IconCamera = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.2L9 5h6l1.3 2h2.2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z" />
+    <circle cx="12" cy="12.8" r="3.3" />
+  </svg>
+)
+export const IconEdit = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4.5 19.5h4l10-10a2.8 2.8 0 0 0-4-4l-10 10z" />
+    <path d="m13.5 6.5 4 4" />
+  </svg>
+)
+export const IconExternal = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M13.5 4.5h6v6M19.5 4.5 11 13" />
+    <path d="M17.5 14v4a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V8A1.5 1.5 0 0 1 6 6.5h4" />
+  </svg>
+)
+export const IconSwitch = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4.5 8.5h13l-3.5-3.5M19.5 15.5h-13l3.5 3.5" />
+  </svg>
+)

@@ -177,7 +177,8 @@ ol {
 }
 .sidebar.glass::after {
   display: none;
-}.card {
+}
+.card {
   border-radius: var(--r-lg);
 }
 .pad {
@@ -259,10 +260,6 @@ ol {
     radial-gradient(40% 40% at 90% 0%, color-mix(in srgb, var(--z-accent-2) 22%, transparent), transparent 70%);
   opacity: var(--z-light);
   mix-blend-mode: screen;
-}
-:root[data-theme='light'] .zone-light {
-  mix-blend-mode: multiply;
-  opacity: calc(var(--z-light) * 0.35);
 }
 .zone-fog {
   position: absolute;

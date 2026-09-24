@@ -51,6 +51,23 @@ CREATE TABLE IF NOT EXISTS achievements (
 
 CREATE INDEX IF NOT EXISTS idx_achievements_unlocked ON achievements (unlocked_at);
 
+CREATE TABLE IF NOT EXISTS profiles (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  nickname     TEXT    NOT NULL,
+  avatar       TEXT,
+  banner       TEXT,
+  steam_linked INTEGER NOT NULL DEFAULT 0,
+  created_at   INTEGER NOT NULL,
+  last_used    INTEGER
+);
+
+-- Tags da loja por appid (inclusive de jogos que não estão nesta biblioteca, para o DNA de amigos).
+CREATE TABLE IF NOT EXISTS app_tags (
+  appid      TEXT PRIMARY KEY,
+  tags       TEXT NOT NULL,
+  fetched_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL

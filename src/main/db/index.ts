@@ -75,14 +75,27 @@ const COLUMNS: Array<[string, string]> = [
   ['details_fetched', 'INTEGER NOT NULL DEFAULT 0'],
   ['install_size', 'INTEGER'],
   ['trailer_url', 'TEXT'],
-  ['steam_ref', 'TEXT']
+  ['steam_ref', 'TEXT'],
+  ['tags', 'TEXT'],
+  ['franchise', 'TEXT'],
+  ['review_pct', 'INTEGER'],
+  ['review_label', 'TEXT'],
+  ['review_count', 'INTEGER'],
+  ['metacritic', 'INTEGER'],
+  ['min_requirements', 'TEXT'],
+  ['min_ram_gb', 'REAL'],
+  ['completed', 'INTEGER NOT NULL DEFAULT 0'],
+  ['store_fetched', 'INTEGER NOT NULL DEFAULT 0']
 ]
 
 const SESSION_COLUMNS: Array<[string, string]> = [
   ['avg_fps', 'REAL'],
   ['avg_cpu', 'REAL'],
   ['avg_gpu', 'REAL'],
-  ['max_gpu_temp', 'REAL']
+  ['max_gpu_temp', 'REAL'],
+  ['max_cpu_temp', 'REAL'],
+  ['profile_id', 'INTEGER'],
+  ['screenshot', 'TEXT']
 ]
 
 function addColumns(d: DatabaseSync, table: string, cols: Array<[string, string]>): void {
@@ -100,6 +113,11 @@ function migrate(d: DatabaseSync): void {
     // Detalhes passam a incluir trailer e referência da Steam: busca de novo sob demanda.
     d.exec('UPDATE games SET details_fetched = 0')
     d.exec('PRAGMA user_version = 3')
+  }
+  if (v < 4) {
+    // Detalhes passam a incluir requisitos mínimos e Metacritic.
+    d.exec('UPDATE games SET details_fetched = 0')
+    d.exec('PRAGMA user_version = 4')
   }
 }
 

@@ -1,37 +1,41 @@
 import { app } from 'electron'
-import { DEFAULT_SETTINGS, type Settings } from '@shared/types'
+import { DEFAULT_CONTROLLER, DEFAULT_SETTINGS, type Settings } from '@shared/types'
 import { getSetting, setSetting } from './db/games'
+import { activeProfileId } from './profiles'
 
-const KEY = 'settings'
+/** Ajustes do perfil ativo (antes da seleção de perfil, os do último perfil usado). */
+function key(): string {
+  const id = activeProfileId()
+  return id == null ? 'settings' : `settings:${id}`
+}
 
 export function loadSettings(): Settings {
   try {
-    const raw = getSetting(KEY)
-    if (!raw) return { ...DEFAULT_SETTINGS }
-    const s = { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) }
+    const raw = getSetting(key()) ?? getSetting('settings')
+    if (!raw) return structuredClone(DEFAULT_SETTINGS)
+    const saved = JSON.parse(raw) as Partial<Settings> & { theme?: string }
+    const s: Settings = { ...DEFAULT_SETTINGS, ...saved, controller: { ...DEFAULT_CONTROLLER, ...(saved.controller ?? {}) } }
     // O atalho antigo (Ctrl+Shift+N) roubava "nova janela anônima" do Chrome e "nova pasta" do Explorer.
     if (s.globalShortcut === 'Control+Shift+N') s.globalShortcut = DEFAULT_SETTINGS.globalShortcut
     return s
   } catch {
-    return { ...DEFAULT_SETTINGS }
+    return structuredClone(DEFAULT_SETTINGS)
   }
 }
 
 export function saveSettings(patch: Partial<Settings>): Settings {
-  const next = { ...loadSettings(), ...patch }
-  setSetting(KEY, JSON.stringify(next))
+  const cur = loadSettings()
+  const next: Settings = { ...cur, ...patch, controller: { ...cur.controller, ...(patch.controller ?? {}) } }
+  setSetting(key(), JSON.stringify(next))
   applySystemSettings(next)
   return next
 }
 
 /** Reflete no sistema o que depende dele: iniciar com o Windows. */
 export function applySystemSettings(s: Settings): void {
-  if (!app.isPackaged) return // em desenvolvimento o executável é o do Electron, não faz sentido registrar
+  if (!app.isPackaged) return
   try {
-    app.setLoginItemSettings({
-      openAtLogin: s.launchOnStartup,
-      args: ['--hidden']
-    })
+    app.setLoginItemSettings({ openAtLogin: s.launchOnStartup, args: ['--hidden'] })
   } catch {
     /* sem permissão para escrever no registro de inicialização */
   }

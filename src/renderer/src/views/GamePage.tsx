@@ -1,7 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Achievement, Game, Session } from '@shared/types'
 import { GameIcon } from '../components/GameCover'
-import { IconBack, IconDownload, IconFolder, IconPlay, IconStar, IconTrash } from '../components/Icons'
+import { IconBack, IconCheck, IconDownload, IconFolder, IconPlay, IconStar, IconTrash } from '../components/Icons'
+import { SmartResume } from '../components/SmartResume'
+import { CommunityRadar } from '../components/CommunityRadar'
+import { imgLoad, imgRef } from '../lib/img'
 import { TrailerVideo } from '../components/TrailerVideo'
 import { artStyle } from '../lib/covers'
 import {
@@ -15,7 +18,7 @@ import {
   relativeTime,
   totalPlaytime
 } from '../lib/format'
-import { loadDetails, play, removeGame, toggleFavorite, useStore } from '../lib/store'
+import { loadDetails, play, removeGame, setCompleted, toggleFavorite, useStore } from '../lib/store'
 import { trailersAllowed, trailerUrl } from '../lib/trailers'
 
 interface Props {
@@ -26,6 +29,8 @@ interface Props {
 /** Página do jogo: banner grande, ícone sobreposto, ação principal e os números que importam. */
 export function GamePage({ game, onBack }: Props) {
   const running = useStore((s) => s.running.has(game.id))
+  const ramGb = useStore((s) => s.ramGb)
+  const [reqOpen, setReqOpen] = useState(false)
   const [sessions, setSessions] = useState<Session[]>([])
   const [achievements, setAchievements] = useState<Achievement[]>([])
   const [bannerBroken, setBannerBroken] = useState(false)
@@ -70,7 +75,7 @@ export function GamePage({ game, onBack }: Props) {
     <div className="page">
       <div className="page-banner" style={{ viewTransitionName: 'game-hero' }}>
         {banner ? (
-          <img src={banner} alt="" draggable={false} decoding="async" onError={() => setBannerBroken(true)} />
+          <img ref={imgRef} className="fade-img" src={banner} alt="" draggable={false} decoding="async" onLoad={imgLoad} onError={() => setBannerBroken(true)} />
         ) : game.coverUrl ? (
           <img className="blur-fill" src={game.coverUrl} alt="" draggable={false} />
         ) : (
@@ -106,12 +111,22 @@ export function GamePage({ game, onBack }: Props) {
                 {game.installed ? 'Instalado' : 'Na Biblioteca'}
               </span>
               {running ? <span className="badge live">Em execução</span> : null}
+              {game.completed ? <span className="badge done">Concluído</span> : null}
             </div>
           </div>
           <div className="page-actions">
             <button className="btn btn-play" onClick={() => play(game)} disabled={running}>
               {canPlay ? <IconPlay width={16} height={16} /> : <IconDownload width={18} height={18} />}
               {running ? 'Em jogo' : canPlay ? 'Jogar' : 'Instalar'}
+            </button>
+            <button
+              className={`btn ghost icobtn lg ${game.completed ? 'done' : ''}`}
+              onClick={() => void setCompleted(game, !game.completed)}
+              aria-pressed={game.completed}
+              aria-label="Marcar como concluído"
+              title={game.completed ? 'Concluído (clique para desmarcar)' : 'Marcar como concluído'}
+            >
+              <IconCheck width={18} height={18} />
             </button>
             <button className={`btn ghost icobtn lg ${game.favorite ? 'fav' : ''}`} onClick={() => void toggleFavorite(game)} aria-label="Favoritar" title="Favoritar">
               <IconStar width={18} height={18} filled={game.favorite} />
@@ -124,12 +139,16 @@ export function GamePage({ game, onBack }: Props) {
           </div>
         </div>
 
+        <SmartResume game={game} />
+
         <div className="stat-strip">
           <Stat label="Plataforma" value={pf.name} />
           <Stat label="Tamanho" value={game.installed ? formatBytes(game.installSize) : 'Não instalado'} />
           <Stat label="Última vez aberto" value={last ? relativeTime(last) : 'Nunca'} hint={last ? formatLongDate(last) : undefined} />
           <Stat label="Tempo jogado" value={formatPlaytime(totalPlaytime(game))} hint={game.platformPlaytimeSeconds ? `${formatPlaytime(game.playtimeSeconds)} no Prisma` : undefined} />
           {game.achievementsTotal ? <Stat label="Conquistas" value={`${game.achievementsUnlocked} de ${game.achievementsTotal}`} /> : null}
+          {game.reviewPct != null ? <Stat label="Avaliação Steam" value={`${game.reviewPct}%`} hint={game.reviewLabel ?? undefined} /> : null}
+          {game.metacritic ? <Stat label="Metacritic" value={String(game.metacritic)} /> : null}
         </div>
 
         <div className="page-grid">
@@ -138,6 +157,7 @@ export function GamePage({ game, onBack }: Props) {
               <h2>Sobre</h2>
               <About text={game.description} loading={loadingDetails} />
             </section>
+            <CommunityRadar game={game} />
             {achievements.length ? (
               <section className="glass card pad">
                 <div className="section-head">
@@ -172,10 +192,56 @@ export function GamePage({ game, onBack }: Props) {
                 {game.publisher && game.publisher !== game.developer ? <Fact k="Distribuidora" v={game.publisher} /> : null}
                 {game.releaseDate ? <Fact k="Lançamento" v={formatLongDate(game.releaseDate)} /> : null}
                 {game.genres.length ? <Fact k="Gêneros" v={game.genres.join(', ')} /> : null}
+                {game.franchise ? <Fact k="Franquia" v={game.franchise} /> : null}
+                <Fact k="Plataforma" v={pf.name} />
+                <Fact k="Tamanho" v={game.installed ? formatBytes(game.installSize) : 'Não instalado'} />
+                {game.reviewLabel ? <Fact k="Steam" v={`${game.reviewLabel}${game.reviewCount ? ` · ${game.reviewCount.toLocaleString('pt-BR')} análises` : ''}`} /> : null}
+                {scores(game) ? <Fact k="Notas" v={scores(game)!} /> : null}
                 <Fact k="Recorde de sessão" v={record ? formatDuration(record) : '—'} />
                 {folder ? <Fact k="Pasta" v={folder} mono /> : null}
               </dl>
+              {game.tags.length ? (
+                <div className="tag-row">
+                  {game.tags.slice(0, 8).map((t) => (
+                    <span key={t} className="tag">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
             </section>
+            {game.minRequirements ? (
+              <section className="glass card pad">
+                <div className="section-head">
+                  <h2>Requisitos mínimos</h2>
+                  {game.minRamGb != null && ramGb > 0 ? (
+                    <span className={`req-check ${game.minRamGb <= ramGb ? 'ok' : 'low'}`}>
+                      {game.minRamGb <= ramGb ? `Seu PC tem ${ramGb} GB de RAM: ok` : `Pede ${game.minRamGb} GB de RAM; seu PC tem ${ramGb} GB`}
+                    </span>
+                  ) : null}
+                </div>
+                <dl className={`reqs ${reqOpen ? 'open' : ''}`}>
+                  {game.minRequirements.split('\n').map((line, i) => {
+                    const m = line.match(/^([^:]{2,28}):\s*(.+)$/)
+                    return m ? (
+                      <div key={i}>
+                        <dt>{m[1]}</dt>
+                        <dd>{m[2]}</dd>
+                      </div>
+                    ) : (
+                      <div key={i} className="req-note">
+                        <dd>{line}</dd>
+                      </div>
+                    )
+                  })}
+                </dl>
+                {game.minRequirements.split('\n').length > 5 ? (
+                  <button className="link more" onClick={() => setReqOpen((v) => !v)}>
+                    {reqOpen ? 'Mostrar menos' : 'Ver todos'}
+                  </button>
+                ) : null}
+              </section>
+            ) : null}
             <section className="glass card pad">
               <h2>Sessões no Prisma</h2>
               {sessions.length ? (
@@ -217,6 +283,14 @@ export function GamePage({ game, onBack }: Props) {
       </div>
     </div>
   )
+}
+
+/** Notas agregadas conhecidas: Steam (% positivas) e Metacritic. */
+function scores(g: Game): string | null {
+  const parts: string[] = []
+  if (g.reviewPct != null) parts.push(`Steam ${g.reviewPct}%`)
+  if (g.metacritic) parts.push(`Metacritic ${g.metacritic}`)
+  return parts.length ? parts.join(' · ') : null
 }
 
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
