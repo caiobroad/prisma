@@ -52,7 +52,7 @@ export function RecentView({ heroKey, onOpen, onHover }: Props) {
               return (
                 <div key={s.id} className="glass session-row" onClick={() => onOpen(g, `session-${s.id}`)}>
                   <div className="session-icon">
-                    <GameIcon game={g} />
+                    <GameIcon game={g} minSize={48} />
                   </div>
                   <div className="session-main">
                     <b>{g.title}</b>

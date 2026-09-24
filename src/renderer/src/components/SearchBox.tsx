@@ -134,7 +134,7 @@ export const SearchBox = memo(function SearchBox({ query, onQuery, onOpenGame }:
           {list.map((s, i) => (
             <button key={`${s.kind}-${s.label}`} role="option" aria-selected={i === sel} className={`sp-item ${i === sel ? 'on' : ''}`} onMouseEnter={() => setSel(i)} onClick={() => apply(s)}>
               <span className="sp-ico">
-                {s.kind === 'game' && s.game ? <GameIcon game={s.game} /> : s.kind === 'history' ? <IconHistory width={15} height={15} /> : <IconFilter width={14} height={14} />}
+                {s.kind === 'game' && s.game ? <GameIcon game={s.game} minSize={0} /> : s.kind === 'history' ? <IconHistory width={15} height={15} /> : <IconFilter width={14} height={14} />}
               </span>
               <span className="sp-label">{s.label}</span>
               {s.hint ? <em>{s.hint}</em> : null}

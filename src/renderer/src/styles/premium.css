@@ -720,7 +720,7 @@
 }
 .dna-bars {
   flex: 1;
-  min-width: 200px;
+  min-width: 190px;
   display: grid;
   gap: 9px;
 }
@@ -1842,4 +1842,56 @@ small.fs-away {
 }
 .tb-profile.st-syncing::after {
   background: var(--warn);
+}
+
+/* ---------- Prateleiras com setas (sem barra de rolagem) ---------- */
+.shelf-wrap {
+  position: relative;
+}
+.shelf-wrap > .shelf-row {
+  scrollbar-width: none;
+}
+.shelf-wrap > .shelf-row::-webkit-scrollbar {
+  display: none;
+}
+.shelf-arrow {
+  position: absolute;
+  z-index: 4;
+  top: calc(8px + 120px - 24px);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  cursor: pointer;
+  background: rgba(10, 13, 22, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 10px 26px rgba(0, 0, 0, 0.45),
+    0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+  opacity: 0.82;
+  transition:
+    opacity 0.2s,
+    transform 0.25s var(--ease),
+    background 0.2s,
+    border-color 0.2s;
+  animation: popIn 0.2s var(--ease) both;
+}
+.shelf-arrow.left {
+  left: -14px;
+}
+.shelf-arrow.right {
+  right: -14px;
+}
+.shelf-arrow.right svg {
+  transform: rotate(180deg);
+}
+.shelf-wrap:hover .shelf-arrow {
+  opacity: 1;
+}
+.shelf-arrow:hover {
+  transform: scale(1.08);
+  background: color-mix(in srgb, var(--accent) 38%, rgba(10, 13, 22, 0.85));
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
 }

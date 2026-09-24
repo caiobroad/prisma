@@ -18,6 +18,7 @@ interface StoreItem {
   tagids?: number[]
   reviews?: { summary_filtered?: { review_count?: number; percent_positive?: number; review_score_label?: string } }
   release?: { steam_release_date?: number; original_release_date?: number }
+  categories?: { controller_categoryids?: number[] }
 }
 
 export interface StoreData {
@@ -26,6 +27,8 @@ export interface StoreData {
   reviewLabel: string | null
   reviewCount: number | null
   releaseDate: number | null
+  /** 28 = suporte completo; 18 = parcial; os demais (DualShock, DualSense…) contam como parcial. */
+  controller: 'full' | 'partial' | 'none'
 }
 
 let tagNames: Map<number, string> | null = null
@@ -71,12 +74,14 @@ export async function fetchStoreItems(appids: string[]): Promise<Map<string, Sto
     const tags = ids.map((t) => names.get(t)).filter((t): t is string => !!t)
     const r = it.reviews?.summary_filtered
     const rel = it.release?.original_release_date || it.release?.steam_release_date || 0
+    const ctrl = it.categories?.controller_categoryids ?? []
     out.set(id, {
       tags,
       reviewPct: r?.review_count ? (r.percent_positive ?? null) : null,
       reviewLabel: r?.review_count ? (r.review_score_label ?? null) : null,
       reviewCount: r?.review_count ?? null,
-      releaseDate: rel > 0 ? rel * 1000 : null
+      releaseDate: rel > 0 ? rel * 1000 : null,
+      controller: ctrl.includes(28) ? 'full' : ctrl.length ? 'partial' : 'none'
     })
     if (tags.length) saveTags(id, tags)
   }

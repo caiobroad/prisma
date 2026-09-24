@@ -12,11 +12,17 @@ function point(i: number, v: number): [number, number] {
 
 const poly = (vals: number[]): string => vals.map((v, i) => point(i, v).map((n) => n.toFixed(1)).join(',')).join(' ')
 
+/** Margem lateral do desenho para os rótulos ("Sobrevivência" é longo). */
+const PAD_X = 64
+const PAD_Y = 12
+
 /** Radar de seis eixos. Com `compare`, desenha o DNA de outra pessoa por baixo, tracejado. */
 export const DnaRadar = memo(function DnaRadar({ dna, compare, size = SIZE }: { dna: Dna; compare?: Dna | null; size?: number }) {
+  const w = SIZE + PAD_X * 2
+  const h = SIZE + PAD_Y * 2
   const vals = DNA_AXES.map((a) => Math.max(0.04, dna.values[a] / 100))
   return (
-    <svg className="dna-radar" viewBox={`0 0 ${SIZE} ${SIZE}`} width={size} height={size} role="img" aria-label="Game DNA">
+    <svg className="dna-radar" viewBox={`${-PAD_X} ${-PAD_Y} ${w} ${h}`} width={(size * w) / SIZE} height={(size * h) / SIZE} role="img" aria-label="Game DNA">
       <defs>
         <radialGradient id="dnaFill" cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="var(--accent-2)" stopOpacity="0.55" />
@@ -49,26 +55,36 @@ export const DnaRadar = memo(function DnaRadar({ dna, compare, size = SIZE }: { 
 })
 
 /** Cartão 1200×630 em PNG para compartilhar: radar, nickname, título e fatias. */
-export async function renderDnaCard(dna: Dna, name: string, accent: string, accent2: string, avatar: string | null): Promise<string> {
+export async function renderDnaCard(dna: Dna, name: string, accentIn: string, accent2In: string, avatar: string | null): Promise<string> {
   const W = 1200
   const H = 630
   const cv = document.createElement('canvas')
   cv.width = W
   cv.height = H
   const ctx = cv.getContext('2d')!
+  // As variáveis da zona chegam como "rgb(…)"; o canvas devolve qualquer cor válida como #rrggbb,
+  // e é nesse formato que dá para acrescentar transparência ("#rrggbb55").
+  const hex = (c: string, fallback: string): string => {
+    ctx.fillStyle = fallback
+    ctx.fillStyle = c || fallback
+    const v = String(ctx.fillStyle)
+    return /^#[0-9a-f]{6}$/i.test(v) ? v : fallback
+  }
+  const accent = hex(accentIn, '#7c9cff')
+  const accent2 = hex(accent2In, '#3dd9eb')
   const bg = ctx.createLinearGradient(0, 0, W, H)
   bg.addColorStop(0, '#0b0e18')
   bg.addColorStop(1, '#151a2c')
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, W, H)
-  const glow = ctx.createRadialGradient(360, 300, 20, 360, 300, 420)
+  const glow = ctx.createRadialGradient(380, 300, 20, 380, 300, 420)
   glow.addColorStop(0, accent + '55')
   glow.addColorStop(1, 'transparent')
   ctx.fillStyle = glow
   ctx.fillRect(0, 0, W, H)
 
   // Radar
-  const cx = 360
+  const cx = 380
   const cy = 330
   const r = 210
   const pt = (i: number, v: number): [number, number] => {

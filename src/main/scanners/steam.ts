@@ -232,10 +232,12 @@ export const steamScanner: Scanner = {
 
       const clientIcon = kvStr(common?.clienticon)
       const iconHash = kvStr(common?.icon)
+      // Ícone oficial em .ico (16 a 256 px): o do disco para os instalados, senão o mesmo arquivo
+      // na CDN da comunidade. O .jpg de "icon" tem só 32×32 e fica borrado a 120 px.
       let iconUrl: string | null = null
-      if (clientIcon) {
+      if (clientIcon && /^[0-9a-f]{40}$/i.test(clientIcon)) {
         const ico = join(steamPath, 'steam', 'games', `${clientIcon}.ico`)
-        if (existsSync(ico)) iconUrl = localAsset(ico)
+        iconUrl = existsSync(ico) ? localAsset(ico) : `https://shared.fastly.steamstatic.com/community_assets/images/apps/${id}/${clientIcon}.ico`
       }
       if (!iconUrl && iconHash) {
         iconUrl = loc(`${iconHash}.jpg`) ?? `https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/apps/${id}/${iconHash}.jpg`

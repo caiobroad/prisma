@@ -85,7 +85,8 @@ const COLUMNS: Array<[string, string]> = [
   ['min_requirements', 'TEXT'],
   ['min_ram_gb', 'REAL'],
   ['completed', 'INTEGER NOT NULL DEFAULT 0'],
-  ['store_fetched', 'INTEGER NOT NULL DEFAULT 0']
+  ['store_fetched', 'INTEGER NOT NULL DEFAULT 0'],
+  ['controller', 'TEXT']
 ]
 
 const SESSION_COLUMNS: Array<[string, string]> = [
@@ -118,6 +119,17 @@ function migrate(d: DatabaseSync): void {
     // Detalhes passam a incluir requisitos mínimos e Metacritic.
     d.exec('UPDATE games SET details_fetched = 0')
     d.exec('PRAGMA user_version = 4')
+  }
+  if (v < 5) {
+    // Suporte a controle vem com os dados da loja: busca de novo. Jogos de outras lojas eram
+    // ligados à Steam por prefixo do título ("Spellbreak" virava "Spell Breakers") e herdavam
+    // gêneros, tags e descrição errados: limpa e deixa a busca exata refazer.
+    d.exec('UPDATE games SET store_fetched = 0')
+    d.exec(`UPDATE games SET steam_ref = NULL, details_fetched = 0, genres = '[]', tags = NULL, description = NULL,
+            trailer_url = NULL, min_requirements = NULL, min_ram_gb = NULL, metacritic = NULL,
+            review_pct = NULL, review_label = NULL, review_count = NULL, controller = NULL
+            WHERE platform NOT IN ('steam', 'manual') AND steam_ref IS NOT NULL`)
+    d.exec('PRAGMA user_version = 5')
   }
 }
 

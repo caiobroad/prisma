@@ -16,7 +16,7 @@ export function PerformanceView() {
   const last = hist[hist.length - 1]
 
   useEffect(() => {
-    const read = (): void => void window.nexus.memory().then(setMem)
+    const read = (): void => void window.nexus.memory().then((v) => v != null && setMem(v))
     read()
     const t = window.setInterval(read, 3000)
     void window.nexus.timeline().then((d) => setSessions(d.sessions.filter((s) => s.avgCpu != null).slice(0, 8)))
@@ -42,7 +42,7 @@ export function PerformanceView() {
             {last?.gpuName ?? 'Sistema'} · leitura a cada segundo enquanto esta tela está aberta, a cada 5 s durante o jogo e desligada no resto do tempo
           </p>
         </div>
-        <div className="mem-badge glass" title="Soma de todos os processos do launcher">
+        <div className="mem-badge glass" title="Conjunto de trabalho privado de todos os processos do launcher, como no Gerenciador de Tarefas">
           <span>Launcher usando</span>
           <b>{mem == null ? '…' : formatBytes(mem)}</b>
         </div>

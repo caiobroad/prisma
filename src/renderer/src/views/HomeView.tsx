@@ -3,6 +3,7 @@ import type { Game } from '@shared/types'
 import { GameCard } from '../components/GameCard'
 import { IconDownload, IconDrive, IconGrid, IconPlay, IconResume } from '../components/Icons'
 import { ScrollView } from '../components/ScrollView'
+import { ShelfRow } from '../components/ShelfRow'
 import { artStyle } from '../lib/covers'
 import { imgLoad, imgRef } from '../lib/img'
 import { formatPlaytime, greeting, lastActivity, PF, relativeTime, totalPlaytime } from '../lib/format'
@@ -61,11 +62,11 @@ const Shelf = memo(function Shelf({
           </button>
         ) : null}
       </div>
-      <div className="shelf-row" onPointerLeave={() => onHover(null)}>
+      <ShelfRow onLeave={() => onHover(null)}>
         {list.map((g) => (
           <GameCard key={g.id} game={g} vtKey={`${id}-${g.id}`} isHero={heroKey === `${id}-${g.id}`} onOpen={onOpen} onHover={onHover} />
         ))}
-      </div>
+      </ShelfRow>
     </section>
   )
 })

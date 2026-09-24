@@ -27,13 +27,18 @@ function normalize(s: string): string {
     .replace(/[^a-z0-9]+/g, '')
 }
 
-/** Encontra o appid da Steam de um jogo de outra loja pelo título. */
+/**
+ * Encontra o appid da Steam de um jogo de outra loja pelo título. Só aceita um app (não
+ * pacote) com o mesmo nome normalizado, comparando com o nome em inglês, como a Epic e a GOG
+ * usam. Prefixo não basta: "Spellbreak" não é "Spell Breakers".
+ */
 async function findSteamRef(title: string): Promise<string | null> {
-  const res = await net.fetch(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(title)}&l=brazilian&cc=BR`)
-  if (!res.ok) return null
+  const res = await net.fetch(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(title)}&l=english&cc=BR`)
+  if (!res.ok) throw new Error(String(res.status))
   const json = (await res.json()) as { items?: Array<{ id: number; name: string; type: string }> }
   const want = normalize(title)
-  const hit = json.items?.find((i) => normalize(i.name) === want) ?? json.items?.find((i) => normalize(i.name).startsWith(want) && want.length > 5)
+  if (!want) return null
+  const hit = json.items?.find((i) => i.type === 'app' && normalize(i.name) === want)
   return hit ? String(hit.id) : null
 }
 

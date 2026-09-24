@@ -251,7 +251,7 @@ export function TimelineView({ onOpen }: Props) {
                     <div className="tl-card glass" onClick={() => e.game && onOpen(e.game, `tl-${e.key}`)} role={e.game ? 'button' : undefined}>
                       {e.game ? (
                         <div className="tl-icon">
-                          <GameIcon game={e.game} />
+                          <GameIcon game={e.game} minSize={48} />
                         </div>
                       ) : (
                         <div className="tl-icon tl-flame">✦</div>

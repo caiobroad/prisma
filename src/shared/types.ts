@@ -59,6 +59,8 @@ export interface Game {
   minRamGb: number | null
   /** Marcado como concluído pelo usuário (ou 100% das conquistas). */
   completed: boolean
+  /** Suporte a controle segundo a loja Steam; null = ainda não se sabe (ou jogo fora da Steam). */
+  controller: 'full' | 'partial' | 'none' | null
 }
 
 export interface Session {
@@ -151,6 +153,8 @@ export interface ControllerSettings {
   cursorSpeed: number
   /** 0 suave, 1 normal, 2 intensa. */
   animation: number
+  /** Na prateleira do Modo Controle, só jogos com suporte a controle. */
+  onlyCompatible: boolean
 }
 
 export type MoodId = 'prisma' | 'resident-evil' | 'silent-hill' | 'cyberpunk' | 'stalker' | 'minecraft' | 'doom' | 'souls'
@@ -241,7 +245,8 @@ export const DEFAULT_CONTROLLER: ControllerSettings = {
   sounds: true,
   volume: 0.6,
   cursorSpeed: 14,
-  animation: 1
+  animation: 1,
+  onlyCompatible: true
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -376,6 +381,7 @@ export interface PrismaApi {
   system(): Promise<{ ramGb: number }>
   on(handler: (event: MainEvent) => void): () => void
   version(): Promise<{ app: string; electron: string; node: string }>
-  memory(): Promise<number>
+  /** Conjunto de trabalho privado do launcher (como no Gerenciador de Tarefas); null até a 1ª leitura. */
+  memory(): Promise<number | null>
   releaseMemory(): void
 }

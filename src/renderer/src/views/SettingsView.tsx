@@ -397,6 +397,13 @@ function ControllerCard() {
       <div className="set">
         <div className="it">
           <div>
+            <b>Só jogos com suporte a controle</b>
+            <span>A prateleira mostra apenas o que a Steam indica como compatível (completo ou parcial)</span>
+          </div>
+          <button className="tg" role="switch" aria-checked={c.onlyCompatible} aria-label="Só jogos com suporte a controle" onClick={() => set({ onlyCompatible: !c.onlyCompatible })} />
+        </div>
+        <div className="it">
+          <div>
             <b>Vibração</b>
             <span>Toques curtos ao navegar e confirmar (controles com motor de vibração)</span>
           </div>

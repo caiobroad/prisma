@@ -2,6 +2,7 @@ import { memo, useMemo, useState } from 'react'
 import type { Game } from '@shared/types'
 import { GameCard } from '../components/GameCard'
 import { ScrollView } from '../components/ScrollView'
+import { ShelfRow as Shelf } from '../components/ShelfRow'
 import { formatBytes, formatHours, PF, totalPlaytime } from '../lib/format'
 import { useStore } from '../lib/store'
 import { realFranchise } from '../lib/search'
@@ -230,12 +231,12 @@ export function CollectionView({ heroKey, onOpen, onHover, onLibrary }: Props) {
 
 const ShelfRow = memo(function ShelfRow({ id, list, heroKey, onOpen, onHover }: { id: string; list: Game[]; heroKey: string | null; onOpen: Props['onOpen']; onHover: Props['onHover'] }) {
   return (
-    <div className="shelf-row col-row" onPointerLeave={() => onHover(null)}>
+    <Shelf className="col-row" onLeave={() => onHover(null)}>
       {list.map((g) => (
         <GameCard key={g.id} game={g} vtKey={`${id}-${g.id}`} isHero={heroKey === `${id}-${g.id}`} onOpen={onOpen} onHover={onHover} />
       ))}
       <span className="shelf-wood" aria-hidden="true" />
-    </div>
+    </Shelf>
   )
 })
 

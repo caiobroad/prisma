@@ -41,6 +41,7 @@ interface GameRow {
   min_requirements: string | null
   min_ram_gb: number | null
   completed: number
+  controller: string | null
 }
 
 const num = (v: number | null | undefined): number | null => (v == null ? null : Number(v))
@@ -95,6 +96,7 @@ function toGame(r: GameRow, ach?: { u: number; t: number }): Game {
     metacritic: num(r.metacritic),
     minRequirements: r.min_requirements,
     minRamGb: num(r.min_ram_gb),
+    controller: (r.controller as Game['controller']) ?? null,
     // Concluído: marcado pelo usuário, ou todas as conquistas desbloqueadas.
     completed: Number(r.completed) === 1 || (!!ach && ach.t > 0 && ach.u >= ach.t)
   }
@@ -590,14 +592,21 @@ export function gamesNeedingDetails(): number[] {
 
 export function saveStoreData(
   id: number,
-  d: { tags: string[]; reviewPct: number | null; reviewLabel: string | null; reviewCount: number | null; releaseDate: number | null }
+  d: {
+    tags: string[]
+    reviewPct: number | null
+    reviewLabel: string | null
+    reviewCount: number | null
+    releaseDate: number | null
+    controller: 'full' | 'partial' | 'none'
+  }
 ): void {
   getDb()
     .prepare(
       `UPDATE games SET tags = ?, review_pct = ?, review_label = ?, review_count = ?,
-       release_date = COALESCE(release_date, ?), store_fetched = 1 WHERE id = ?`
+       release_date = COALESCE(release_date, ?), controller = ?, store_fetched = 1 WHERE id = ?`
     )
-    .run(d.tags.length ? JSON.stringify(d.tags) : null, d.reviewPct, d.reviewLabel, d.reviewCount, d.releaseDate, id)
+    .run(d.tags.length ? JSON.stringify(d.tags) : null, d.reviewPct, d.reviewLabel, d.reviewCount, d.releaseDate, d.controller, id)
 }
 
 export function markStoreFetched(id: number): void {

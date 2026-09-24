@@ -1,6 +1,7 @@
 import os from 'os'
 import { app } from 'electron'
 import { execFile } from 'child_process'
+import { monitor } from './monitor'
 
 /**
  * Pede o fechamento dos processos configurados como pesados. Usa taskkill sem /F:
@@ -32,7 +33,12 @@ export function setLauncherPriority(low: boolean): void {
   }
 }
 
-/** Memória total do launcher (processo principal, GPU e renderer), em bytes. */
-export function launcherMemory(): number {
-  return app.getAppMetrics().reduce((s, m) => s + (m.memory?.workingSetSize ?? 0) * 1024, 0)
+/**
+ * Memória do launcher como o Gerenciador de Tarefas mostra: conjunto de trabalho privado
+ * somado de todos os processos (principal, GPU, rede e renderer). O working set comum conta
+ * também páginas compartilhadas (DLLs, memória do driver) e chega ao dobro do valor real.
+ * null até o monitor (ligado pela tela de Performance) fazer a primeira leitura.
+ */
+export function launcherMemory(): number | null {
+  return monitor.launcherPrivate()
 }

@@ -33,12 +33,17 @@ export function GameCover({ game }: { game: Game }) {
   )
 }
 
-/** Ícone/logo quadrado (120×120 na página do jogo). */
-export function GameIcon({ game }: { game: Game }) {
-  // Ícone quadrado, depois logotipo, depois o topo da capa recortado, e por fim o monograma.
+/**
+ * Ícone/logo quadrado (120×120 na página do jogo). Ícone quadrado, depois logotipo, depois o
+ * topo da capa recortado, e por fim o monograma. Um ícone menor que `minSize` px (há jogos
+ * cujo .ico oficial só vai até 32 px) cede a vez à próxima fonte nítida; se nenhuma carregar,
+ * ele volta.
+ */
+export function GameIcon({ game, minSize = 96 }: { game: Game; minSize?: number }) {
   const sources = [game.iconUrl, game.iconData, game.logoUrl, game.coverUrl].filter((s): s is string => !!s)
   const [i, setI] = useState(0)
-  const src = sources[i]
+  const [lowRes, setLowRes] = useState<number | null>(null)
+  const src = sources[i] ?? (lowRes != null ? sources[lowRes] : undefined)
   if (!src) {
     return (
       <div className="icon-mono" style={artStyle(game.title)}>
@@ -47,5 +52,21 @@ export function GameIcon({ game }: { game: Game }) {
     )
   }
   const cls = src === game.logoUrl ? 'icon-logo' : src === game.coverUrl ? 'icon-cover' : 'icon-img'
-  return <img className={cls} src={src} alt="" draggable={false} onError={() => setI((n) => n + 1)} />
+  return (
+    <img
+      className={cls}
+      src={src}
+      alt=""
+      draggable={false}
+      onLoad={(e) => {
+        // Ícone pequeno demais (não vale para a capa, que é sempre grande): tenta a próxima fonte.
+        const small = e.currentTarget.naturalWidth > 0 && e.currentTarget.naturalWidth < minSize
+        if (small && i < sources.length - 1 && src !== game.iconData) {
+          setLowRes((l) => l ?? i)
+          setI(i + 1)
+        }
+      }}
+      onError={() => setI((n) => n + 1)}
+    />
+  )
 }

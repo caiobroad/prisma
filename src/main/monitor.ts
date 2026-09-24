@@ -1,5 +1,7 @@
 import os from 'os'
-import { existsSync } from 'fs'
+import { app } from 'electron'
+import { existsSync, writeFileSync } from 'fs'
+import { basename, join } from 'path'
 import { spawn, type ChildProcess } from 'child_process'
 import type { PerfSample } from '@shared/types'
 import { setSessionPerf } from './db/games'
@@ -42,6 +44,12 @@ while ($true) {
     $o.gpu = [math]::Min(100, $max)
     $o.vram = (Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUAdapterMemory | Measure-Object DedicatedUsage -Maximum).Maximum
   }
+  # Memória do launcher como o Gerenciador de Tarefas mostra: conjunto de trabalho privado.
+  $ids = @()
+  if (Test-Path $env:NX_PIDS) { $ids = @((Get-Content $env:NX_PIDS -Raw) -split ',' | Where-Object { $_ } | ForEach-Object { [int]$_ }) }
+  if ($ids.Count) {
+    $o.mem = (Get-CimInstance Win32_PerfFormattedData_PerfProc_Process -Filter "Name LIKE '$($env:NX_EXE)%'" | Where-Object { $ids -contains [int]$_.IDProcess } | Measure-Object WorkingSetPrivate -Sum).Sum
+  }
   $t = (Get-CimInstance Win32_PerfFormattedData_Counters_ThermalZoneInformation | Measure-Object HighPrecisionTemperature -Maximum).Maximum
   if ($t) { $o.temp = [math]::Round($t / 10 - 273.15, 1) }
   [Console]::Out.WriteLine(($o | ConvertTo-Json -Compress))
@@ -64,7 +72,9 @@ class Monitor {
   private nvData: { gpu: number; temp: number; used: number; total: number; name: string } | null = null
 
   private wmi: ChildProcess | null = null
-  private wmiData: { gpu?: number; vram?: number; temp?: number } = {}
+  private wmiData: { gpu?: number; vram?: number; temp?: number; mem?: number } = {}
+  private pidsFile = join(os.tmpdir(), `prisma-pids-${process.pid}.txt`)
+  private pidsWritten = ''
 
   private pm: ChildProcess | null = null
   private pmFrames: number[] = []
@@ -77,6 +87,26 @@ class Monitor {
 
   latest(): PerfSample | null {
     return this.last
+  }
+
+  /** Conjunto de trabalho privado somado dos processos do launcher (null até a 1ª leitura do WMI). */
+  launcherPrivate(): number | null {
+    return this.wmi && this.wmiData.mem ? this.wmiData.mem : null
+  }
+
+  private writePids(): void {
+    const pids = app
+      .getAppMetrics()
+      .map((m) => m.pid)
+      .sort((a, b) => a - b)
+      .join(',')
+    if (pids === this.pidsWritten) return
+    try {
+      writeFileSync(this.pidsFile, pids)
+      this.pidsWritten = pids
+    } catch {
+      /* pasta temporária indisponível */
+    }
   }
 
   setPresentMon(path: string): void {
@@ -142,6 +172,7 @@ class Monitor {
   }
 
   private tick(): void {
+    if (this.watchers > 0) this.writePids()
     const now = os.cpus().map((c) => c.times)
     let idle = 0
     let total = 0
@@ -243,10 +274,11 @@ class Monitor {
   // ---------- WMI (temperatura ACPI; GPU quando não há NVIDIA) ----------
 
   private startWmi(ms: number): void {
+    this.writePids()
     const p = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', WMI_SCRIPT], {
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'ignore'],
-      env: { ...process.env, NX_GPU: this.findNv() ? '0' : '1', NX_MS: String(ms) }
+      env: { ...process.env, NX_GPU: this.findNv() ? '0' : '1', NX_MS: String(ms), NX_PIDS: this.pidsFile, NX_EXE: basename(process.execPath, '.exe') }
     })
     this.wmi = p
     let buf = ''
@@ -258,7 +290,7 @@ class Monitor {
         const line = buf.slice(0, i).trim()
         buf = buf.slice(i + 1)
         try {
-          const o = JSON.parse(line) as { gpu?: number; vram?: number; temp?: number }
+          const o = JSON.parse(line) as { gpu?: number; vram?: number; temp?: number; mem?: number }
           this.wmiData = o
         } catch {
           /* linha parcial */

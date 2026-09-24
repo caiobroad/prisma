@@ -39,6 +39,14 @@ export function realFranchise(g: Game): string | null {
   return g.franchise
 }
 
+/**
+ * O que conta como gênero de um jogo: os gêneros oficiais da loja e só as 5 tags mais votadas.
+ * As tags da Steam vão até 20 e as últimas são ruído ("Terror" é a 17ª do VRChat).
+ */
+export function genreTags(g: Game): string[] {
+  return [...g.genres, ...g.tags.slice(0, 5)]
+}
+
 const plural = (n: number): string => `${n} ${n === 1 ? 'jogo' : 'jogos'}`
 
 const yearOf = (g: Game): number | null => (g.releaseDate ? new Date(g.releaseDate).getFullYear() : null)
@@ -61,7 +69,7 @@ export function tokenFilter(tok: string): Filter | null {
   let m = body.match(/^(genero|tag|g):(.+)$/)
   if (m) {
     const v = m[2].replace(/_/g, ' ')
-    return wrap({ key: tok, label: `gênero ${v}`, test: (g) => g.genres.some((x) => normalize(x).includes(v)) || g.tags.some((x) => normalize(x).includes(v)) })
+    return wrap({ key: tok, label: `gênero ${v}`, test: (g) => genreTags(g).some((x) => normalize(x).includes(v)) })
   }
   m = body.match(/^(plataforma|pf|loja):(.+)$/)
   if (m) {
@@ -137,7 +145,7 @@ export function parseQuery(q: string): ParsedQuery {
 }
 
 export function searchIndex(g: Game): string {
-  return normalize(`${g.title} ${PF[g.platform].name} ${g.developer ?? ''} ${g.publisher ?? ''} ${g.franchise ?? ''} ${g.tags.slice(0, 8).join(' ')}`)
+  return normalize(`${g.title} ${PF[g.platform].name} ${g.developer ?? ''} ${g.publisher ?? ''} ${g.franchise ?? ''} ${genreTags(g).join(' ')}`)
 }
 
 export function matches(g: Game, hay: string, p: ParsedQuery, ramGb: number): boolean {
@@ -174,13 +182,18 @@ export function suggest(q: string, games: Game[], history: string[]): Suggestion
     const genres = new Map<string, number>()
     const franchises = new Map<string, number>()
     for (const g of games) {
-      for (const x of [...g.genres, ...g.tags.slice(0, 6)]) if (normalize(x).startsWith(last)) genres.set(x, (genres.get(x) ?? 0) + 1)
+      for (const x of new Set(genreTags(g))) if (normalize(x).startsWith(last)) genres.set(x, (genres.get(x) ?? 0) + 1)
       const fr = realFranchise(g)
       if (fr && normalize(fr).includes(last)) franchises.set(fr, (franchises.get(fr) ?? 0) + 1)
     }
     const top = (m: Map<string, number>, n: number): Array<[string, number]> => [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, n)
-    for (const [name, n] of top(genres, 3))
-      out.push({ kind: 'filter', label: `Gênero: ${name}`, hint: plural(n), value: `${head}genero:${normalize(name).replace(/\s+/g, '_')} ` })
+    for (const [name] of top(genres, 3)) {
+      const key = `genero:${normalize(name).replace(/\s+/g, '_')}`
+      // A contagem é a do próprio filtro, para o número bater com o resultado.
+      const f = tokenFilter(key)
+      const n = f ? games.filter((g) => f.test(g, 0)).length : 0
+      out.push({ kind: 'filter', label: `Gênero: ${name}`, hint: plural(n), value: `${head}${key} ` })
+    }
     for (const [name, n] of top(franchises, 2))
       out.push({ kind: 'filter', label: `Franquia: ${name}`, hint: plural(n), value: `${head}franquia:"${name}" ` })
     for (const p of Object.keys(PF) as Platform[])

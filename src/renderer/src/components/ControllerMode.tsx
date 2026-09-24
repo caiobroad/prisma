@@ -68,7 +68,8 @@ export function ControllerMode({ onExit, onFocusGame }: Props) {
   }, [])
 
   const lists = useMemo(() => {
-    const real = games.filter((g) => g.id < 1_000_000)
+    // Por padrão, só o que a loja Steam confirma que funciona com controle (completo ou parcial).
+    const real = games.filter((g) => g.id < 1_000_000 && (!cs.onlyCompatible || g.controller === 'full' || g.controller === 'partial'))
     const byName = (a: Game, b: Game): number => a.title.localeCompare(b.title, 'pt-BR')
     const byRecent = (a: Game, b: Game): number => lastActivity(b) - lastActivity(a) || byName(a, b)
     return {
@@ -77,7 +78,7 @@ export function ControllerMode({ onExit, onFocusGame }: Props) {
       recent: real.filter((g) => lastActivity(g) > 0).sort(byRecent),
       favorites: real.filter((g) => g.favorite).sort(byName)
     } satisfies Record<Tab, Game[]>
-  }, [games])
+  }, [games, cs.onlyCompatible])
 
   const list = lists[tab]
   const idx = Math.min(focus[tab], Math.max(0, list.length - 1))
@@ -292,11 +293,17 @@ export function ControllerMode({ onExit, onFocusGame }: Props) {
             {lastActivity(game) ? <span>{relativeTime(lastActivity(game))}</span> : null}
             {game.favorite ? <span>★ Favorito</span> : null}
             {game.completed ? <span>✓ Concluído</span> : null}
+            {game.controller === 'full' ? <span>🎮 Suporte completo a controle</span> : game.controller === 'partial' ? <span>🎮 Suporte parcial a controle</span> : null}
           </div>
         </div>
       ) : (
         <div className="cm-info">
           <h1 className="cm-title">Nada por aqui</h1>
+          {cs.onlyCompatible ? (
+            <div className="cm-meta">
+              <span>Mostrando só jogos com suporte a controle confirmado pela Steam · desligue em Ajustes (⧉)</span>
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -433,6 +440,7 @@ type Row =
   | { key: keyof ControllerSettings; label: string; kind: 'range'; min: number; max: number; step: number; fmt: (v: number) => string }
 
 const ROWS: Row[] = [
+  { key: 'onlyCompatible', label: 'Só jogos com suporte a controle', kind: 'bool' },
   { key: 'vibration', label: 'Vibração', kind: 'bool' },
   { key: 'sounds', label: 'Sons do sistema', kind: 'bool' },
   { key: 'volume', label: 'Volume dos sons', kind: 'range', min: 0, max: 1, step: 0.1, fmt: (v) => `${Math.round(v * 100)}%` },

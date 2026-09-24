@@ -64,11 +64,24 @@ export function ProfileView({ friend, onFriend, onFriends }: Props) {
   const share = async (mode: 'save' | 'copy'): Promise<void> => {
     if (!shownDna) return
     const cs = getComputedStyle(document.querySelector('.app') as HTMLElement)
-    const url = await renderDnaCard(shownDna, name, cs.getPropertyValue('--z-accent').trim() || '#7c9cff', cs.getPropertyValue('--z-accent-2').trim() || '#3dd9eb', avatar)
-    if (mode === 'copy') {
-      window.nexus.shell.copyImage(url)
-      toast('Game DNA copiado: cole em qualquer conversa')
-    } else if (await window.nexus.shell.saveImage(url, `Game DNA - ${name}`)) toast('Imagem salva')
+    try {
+      const url = await renderDnaCard(shownDna, name, cs.getPropertyValue('--z-accent').trim(), cs.getPropertyValue('--z-accent-2').trim(), avatar)
+      if (mode === 'copy') {
+        try {
+          const bin = atob(url.split(',')[1] ?? '')
+          const bytes = new Uint8Array(bin.length)
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+          const blob = new Blob([bytes], { type: 'image/png' })
+          await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
+        } catch {
+          // Área de transferência do navegador indisponível: o processo principal copia.
+          window.nexus.shell.copyImage(url)
+        }
+        toast('Game DNA copiado: cole em qualquer conversa')
+      } else if (await window.nexus.shell.saveImage(url, `Game DNA - ${name}`)) toast('Imagem salva')
+    } catch (e) {
+      toast(`Não foi possível gerar a imagem: ${(e as Error).message}`, 'err')
+    }
   }
 
   const online = (friends?.friends ?? []).filter((f) => f.state === 'playing' || f.state === 'online' || f.state === 'away')
@@ -178,7 +191,7 @@ export function ProfileView({ friend, onFriend, onFriends }: Props) {
             {shownDna && shownDna.dominant ? (
               <>
                 <div className="dna-body">
-                  <DnaRadar dna={shownDna} compare={own ? theirDna : myDna} />
+                  <DnaRadar dna={shownDna} compare={own ? theirDna : myDna} size={210} />
                   <ul className="dna-bars">
                     {[...DNA_AXES]
                       .sort((a, b) => shownDna.share[b] - shownDna.share[a])
