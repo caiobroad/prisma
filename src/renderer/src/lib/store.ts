@@ -92,10 +92,10 @@ export function useStore<T>(selector: (s: State) => T): T {
 
 let toastTimer: number | null = null
 
-export function toast(text: string, kind: 'ok' | 'err' = 'ok'): void {
+export function toast(text: string, kind: 'ok' | 'err' = 'ok', ms = 2800): void {
   setState({ toast: { id: Date.now(), text, kind } })
   if (toastTimer) window.clearTimeout(toastTimer)
-  toastTimer = window.setTimeout(() => setState({ toast: null }), 2800)
+  toastTimer = window.setTimeout(() => setState({ toast: null }), ms)
 }
 
 function replaceGame(g: Game): void {
@@ -263,7 +263,10 @@ export function initStore(): void {
   void refresh()
   void window.nexus.settings.get().then((settings) => setState({ settings }))
   void window.nexus.system().then(({ ramGb }) => setState({ ramGb }))
-  void window.nexus.update.status().then((update) => setState({ update }))
+  void window.nexus.update.status().then((update) => {
+    setState({ update })
+    if (update.updatedFrom) toast(`Prisma atualizado para a versão ${update.current}${update.updatedFrom !== '?' ? ` (antes ${update.updatedFrom})` : ''}`, 'ok', 7000)
+  })
   // A cada abertura do app pergunta quem está jogando (a janela recriada depois de um jogo, não).
   void Promise.all([window.nexus.profiles.list(), window.nexus.profiles.active(), window.nexus.profiles.needsPick()]).then(
     ([profiles, profile, needsPick]) => setState({ profiles, profile, pickingProfile: needsPick })

@@ -1,8 +1,11 @@
 import { app, net, shell } from 'electron'
+import { readFileSync } from 'fs'
+import { join } from 'path'
 import { autoUpdater, type UpdateInfo } from 'electron-updater'
 import type { UpdateStatus } from '@shared/types'
 import { anyRunning } from './sessions'
 import { loadSettings } from './settings'
+import { getSetting, setSetting } from './db/games'
 
 /**
  * Atualização pelo próprio launcher. As versões ficam nas releases do repositório público
@@ -29,7 +32,8 @@ let status: UpdateStatus = {
   percent: null,
   notes: null,
   message: enabled ? null : 'Atualizações automáticas só na versão instalada.',
-  checkedAt: null
+  checkedAt: null,
+  updatedFrom: null
 }
 let listener: Listener | null = null
 let timer: NodeJS.Timeout | null = null
@@ -66,8 +70,30 @@ function newer(a: string, b: string): boolean {
   return false
 }
 
+/**
+ * Versões anteriores à 0.2.2 não registravam a própria versão. Para elas, a pista de que esta
+ * abertura veio de uma atualização é o instalador que o electron-updater deixou em "pending".
+ */
+function updatedByUpdater(): boolean {
+  try {
+    const dir = join(process.env.LOCALAPPDATA ?? '', 'prisma-launcher-updater', 'pending')
+    const info = JSON.parse(readFileSync(join(dir, 'update-info.json'), 'utf8')) as { fileName?: string }
+    return !!info.fileName && info.fileName.includes(app.getVersion())
+  } catch {
+    return false
+  }
+}
+
 export function initUpdater(onStatus: Listener): void {
   listener = onStatus
+  // Primeira abertura depois de atualizar: a interface avisa "Prisma atualizado para a versão X".
+  // Só a versão instalada registra a própria versão (a cópia de desenvolvimento usa o mesmo banco).
+  if (app.isPackaged) {
+    const last = getSetting('app:version')
+    if (last && newer(app.getVersion(), last)) status.updatedFrom = last
+    else if (!last && updatedByUpdater()) status.updatedFrom = '?'
+    setSetting('app:version', app.getVersion())
+  }
   if (!enabled) return
   if (!portable) {
     autoUpdater.autoDownload = !devTest
@@ -139,8 +165,11 @@ export function checkNow(): Promise<UpdateStatus> {
   return checking
 }
 
+/** Estado atual. O aviso de "atualizado" é entregue uma vez só (a janela pode ser recriada). */
 export function getUpdateStatus(): UpdateStatus {
-  return status
+  const s = status
+  if (status.updatedFrom) status = { ...status, updatedFrom: null }
+  return s
 }
 
 /** Instala a versão baixada: fecha o Prisma, roda o instalador em silêncio e reabre. */

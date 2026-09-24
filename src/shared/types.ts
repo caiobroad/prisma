@@ -287,6 +287,8 @@ export interface UpdateStatus {
   notes: string | null
   message: string | null
   checkedAt: number | null
+  /** Versão anterior, na primeira abertura depois de uma atualização (some depois de lida). */
+  updatedFrom: string | null
 }
 
 export interface LaunchResult {
