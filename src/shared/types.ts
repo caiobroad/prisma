@@ -237,6 +237,8 @@ export interface Settings {
   controller: ControllerSettings
   /** Buscas recentes deste perfil. */
   searchHistory: string[]
+  /** Procurar e baixar atualizações sozinho (versão instalada). */
+  autoUpdate: boolean
 }
 
 export const DEFAULT_CONTROLLER: ControllerSettings = {
@@ -272,7 +274,19 @@ export const DEFAULT_SETTINGS: Settings = {
   achievementSound: true,
   steamApiKey: '',
   controller: DEFAULT_CONTROLLER,
-  searchHistory: []
+  searchHistory: [],
+  autoUpdate: true
+}
+
+/** Estado do atualizador. `portable`: a versão portátil não se atualiza; só avisa e leva ao download. */
+export interface UpdateStatus {
+  state: 'idle' | 'disabled' | 'checking' | 'none' | 'downloading' | 'ready' | 'portable' | 'error'
+  current: string
+  version: string | null
+  percent: number | null
+  notes: string | null
+  message: string | null
+  checkedAt: number | null
 }
 
 export interface LaunchResult {
@@ -306,6 +320,7 @@ export type MainEvent =
   | { type: 'perf:closed'; names: string[] }
   | { type: 'achievement:unlocked'; achievement: Achievement; gameTitle: string }
   | { type: 'enrich:progress'; done: number; total: number }
+  | { type: 'update:status'; status: UpdateStatus }
 
 export interface PrismaApi {
   games: {
@@ -375,6 +390,15 @@ export interface PrismaApi {
     /** Salva uma imagem PNG (data URL) escolhendo o destino. */
     saveImage(dataUrl: string, name: string): Promise<boolean>
     copyImage(dataUrl: string): void
+  }
+  update: {
+    status(): Promise<UpdateStatus>
+    /** Procura agora (botão em Ajustes). */
+    check(): Promise<UpdateStatus>
+    /** Fecha o Prisma, instala a versão baixada e abre de novo. */
+    install(): Promise<{ ok: boolean; message: string }>
+    /** Versão portátil: abre a página de download da versão nova. */
+    openDownload(): void
   }
   /** Mostra uma notificação de conquista de teste (sobreposição por cima de tudo). */
   testAchievementPopup(): void

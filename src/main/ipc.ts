@@ -37,10 +37,13 @@ import { friendLibrary, listFriends, myLibrary, tagsFor } from './steamWeb'
 import { startEnrichment } from './enrich'
 import { pruneResume, resumeEnded, resumeStarted } from './resume'
 import { testAchievementPopup, unwatchAchievements, watchAchievements } from './notifier'
+import { checkNow, getUpdateStatus, installNow, openPortableDownload } from './updater'
 
 export interface WindowHost {
   getWindow(): BrowserWindow | null
   gameStarted(performanceMode: boolean): void
+  /** Marca que o app vai fechar de verdade (não só esconder na bandeja). */
+  prepareQuit(): void
 }
 
 let scanning: Promise<ScanResult> | null = null
@@ -243,6 +246,10 @@ export function registerIpc(host: WindowHost, onSettings: (s: Settings) => void)
     void clipboard.write([new ClipboardItem({ 'image/png': png })]).catch(() => undefined)
   })
   ipcMain.on('achievement:test', () => testAchievementPopup())
+  ipcMain.handle('update:status', () => getUpdateStatus())
+  ipcMain.handle('update:check', () => checkNow())
+  ipcMain.handle('update:install', () => installNow(host.prepareQuit))
+  ipcMain.on('update:openDownload', () => openPortableDownload())
   ipcMain.handle('app:system', () => ({ ramGb: Math.round(os.totalmem() / 1024 ** 3) }))
 
   ipcMain.handle('app:version', () => ({ app: app.getVersion(), electron: process.versions.electron, node: process.versions.node }))

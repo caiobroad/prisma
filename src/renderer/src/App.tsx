@@ -10,6 +10,7 @@ import { PerformanceCenter } from './components/PerformanceCenter'
 import { LaunchCinematic } from './components/LaunchCinematic'
 import { IdleShowcase } from './components/IdleShowcase'
 import { ProfileSelect } from './components/ProfileSelect'
+import { UpdateBanner } from './components/UpdateBanner'
 import { HomeView, pickFeatured } from './views/HomeView'
 import { LibraryView } from './views/LibraryView'
 import { RecentView } from './views/RecentView'
@@ -406,6 +407,7 @@ export default function App() {
       {launch?.phase === 'center' && launch.game ? <PerformanceCenter game={launch.game} /> : null}
       {launch && launch.phase !== 'center' ? <LaunchCinematic game={launch.game} phase={launch.phase} /> : null}
       {idle ? <IdleShowcase onSlide={onSlide} /> : null}
+      {!picking && !controller ? <UpdateBanner /> : null}
       <Toast />
     </div>
   )

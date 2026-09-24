@@ -15,7 +15,8 @@ win:
     - nsis
     - portable
 nsis:
-  artifactName: ${productName} Setup ${version}.${ext}
+  # Sem espaços: o GitHub troca espaço por ponto e o latest.yml do atualizador deixaria de achar o arquivo.
+  artifactName: ${productName}-Setup-${version}.${ext}
   oneClick: true
   perMachine: false
   allowToChangeInstallationDirectory: false
@@ -27,4 +28,10 @@ nsis:
   installerIcon: launcher/prisma.ico
   uninstallerIcon: launcher/prisma.ico
 portable:
-  artifactName: ${productName} ${version} Portatil.${ext}
+  artifactName: ${productName}-${version}-Portatil.${ext}
+# Atualização automática: o app instalado lê o latest.yml das releases do repositório público.
+publish:
+  provider: github
+  owner: caiobroad
+  repo: prisma
+  releaseType: release

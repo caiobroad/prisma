@@ -9,6 +9,7 @@ import { applySystemSettings, loadSettings } from './settings'
 import { anyRunning, finishAll, onSession } from './sessions'
 import { monitor } from './monitor'
 import { setLauncherPriority } from './perfmode'
+import { initUpdater, stopUpdater } from './updater'
 import type { Settings } from '@shared/types'
 
 
@@ -85,6 +86,9 @@ function cancelHibernate(): void {
 
 const host: WindowHost = {
   getWindow: () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null),
+  prepareQuit() {
+    quitting = true
+  },
   gameStarted(performanceMode) {
     if (performanceMode) {
       gameMode = 'hibernated'
@@ -116,6 +120,7 @@ app.whenReady().then(() => {
   ensureWindow({ hidden: process.argv.includes('--hidden') })
 
   registerIpc(host, (s) => applyRuntimeSettings(s))
+  initUpdater((status) => broadcast({ type: 'update:status', status }))
   createTray(
     () => ensureWindow(),
     () => void scanLibraries()
@@ -169,6 +174,7 @@ app.on('before-quit', () => {
 
 app.on('will-quit', () => {
   if (scanTimer) clearInterval(scanTimer)
+  stopUpdater()
   cancelHibernate()
   globalShortcut.unregisterAll()
   finishAll()

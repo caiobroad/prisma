@@ -162,6 +162,8 @@ export function SettingsView({ onCredits }: { onCredits: () => void }) {
           </div>
         </section>
 
+        <UpdatesCard />
+
         <section className="glass card">
           <h2 className="card-title">Geral</h2>
           <div className="set">
@@ -451,6 +453,72 @@ function ControllerCard() {
             [1, 'Normal'],
             [2, 'Intensa']
           ])}
+        </div>
+      </div>
+    </section>
+  )
+}
+/** Atualizações pelo próprio launcher (as versões ficam nas releases do GitHub do Prisma). */
+function UpdatesCard() {
+  const u = useStore((s) => s.update)
+  const auto = useStore((s) => s.settings.autoUpdate)
+  const [busy, setBusy] = useState(false)
+  const check = async (): Promise<void> => {
+    setBusy(true)
+    try {
+      const s = await window.nexus.update.check()
+      if (s.state === 'none') toast('Você já está na versão mais recente')
+      else if (s.state === 'error') toast(s.message ?? 'Não foi possível verificar', 'err')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const text = !u
+    ? '…'
+    : u.state === 'disabled'
+      ? (u.message ?? 'Indisponível nesta versão')
+      : u.state === 'checking'
+        ? 'Procurando…'
+        : u.state === 'downloading'
+          ? `Baixando o Prisma ${u.version ?? ''}${u.percent != null ? ` · ${u.percent}%` : ''}`
+          : u.state === 'ready'
+            ? `Prisma ${u.version} baixado: instala ao fechar ou em "Reiniciar e atualizar"`
+            : u.state === 'portable'
+              ? `Prisma ${u.version} disponível para baixar (versão portátil)`
+              : u.state === 'error'
+                ? (u.message ?? 'Erro ao verificar')
+                : u.checkedAt
+                  ? `Tudo em dia · verificado ${new Date(u.checkedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+                  : 'Verifica ao abrir e a cada 6 horas'
+  return (
+    <section className="glass card">
+      <h2 className="card-title">Atualizações</h2>
+      <div className="set">
+        <div className="it">
+          <div>
+            <b>Versão {u?.current ?? ''}</b>
+            <span>{text}</span>
+          </div>
+          {u?.state === 'ready' ? (
+            <button className="btn sm" onClick={() => void window.nexus.update.install().then((r) => toast(r.message, r.ok ? 'ok' : 'err'))}>
+              Reiniciar e atualizar
+            </button>
+          ) : u?.state === 'portable' ? (
+            <button className="btn sm" onClick={() => window.nexus.update.openDownload()}>
+              Baixar
+            </button>
+          ) : (
+            <button className="btn ghost sm" onClick={() => void check()} disabled={busy || !u || u.state === 'disabled' || u.state === 'checking' || u.state === 'downloading'}>
+              {busy ? 'Procurando…' : 'Procurar atualizações'}
+            </button>
+          )}
+        </div>
+        <div className="it">
+          <div>
+            <b>Atualizar automaticamente</b>
+            <span>Baixa em segundo plano (nunca durante um jogo) e instala quando você fechar o Prisma</span>
+          </div>
+          <button className="tg" role="switch" aria-checked={auto} aria-label="Atualizar automaticamente" onClick={() => void updateSettings({ autoUpdate: !auto })} />
         </div>
       </div>
     </section>

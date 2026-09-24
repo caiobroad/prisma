@@ -1895,3 +1895,44 @@ small.fs-away {
   background: color-mix(in srgb, var(--accent) 38%, rgba(10, 13, 22, 0.85));
   border-color: color-mix(in srgb, var(--accent) 60%, transparent);
 }
+/* ---------- Aviso de atualização ---------- */
+.upd {
+  position: absolute;
+  z-index: 45;
+  right: 24px;
+  bottom: 24px;
+  width: min(460px, calc(100% - 48px));
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px 14px;
+  padding: 16px 18px;
+  border-radius: var(--r-lg);
+  background: var(--pane) !important;
+  animation: popIn 0.35s var(--ease) both;
+}
+.upd-ico {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  color: var(--z-on-accent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 55%, #fff), var(--accent));
+}
+.upd-txt b {
+  display: block;
+  font-size: 14.5px;
+}
+.upd-txt span {
+  display: block;
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.4;
+}
+.upd-act {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

@@ -69,6 +69,12 @@ const api: PrismaApi = {
     saveImage: (dataUrl, name) => ipcRenderer.invoke('shell:saveImage', dataUrl, name),
     copyImage: (dataUrl) => ipcRenderer.send('shell:copyImage', dataUrl)
   },
+  update: {
+    status: () => ipcRenderer.invoke('update:status'),
+    check: () => ipcRenderer.invoke('update:check'),
+    install: () => ipcRenderer.invoke('update:install'),
+    openDownload: () => ipcRenderer.send('update:openDownload')
+  },
   testAchievementPopup: () => ipcRenderer.send('achievement:test'),
   system: () => ipcRenderer.invoke('app:system'),
   on: (handler: (event: MainEvent) => void) => {

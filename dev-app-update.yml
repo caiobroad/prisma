@@ -1,0 +1,4 @@
+# Só para testar o atualizador em desenvolvimento (PRISMA_UPDATE_TEST=1).
+provider: github
+owner: caiobroad
+repo: prisma

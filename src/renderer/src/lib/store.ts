@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import type { Game, MainEvent, PerfSample, Profile, ScanResult, Settings, SourceStatus, WindowState } from '@shared/types'
+import type { Game, MainEvent, PerfSample, Profile, ScanResult, Settings, SourceStatus, UpdateStatus, WindowState } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
 
 /**
@@ -40,6 +40,7 @@ export interface State {
   ramGb: number
   /** Enriquecimento da biblioteca em segundo plano (tags, requisitos, avaliações). */
   enrich: { done: number; total: number } | null
+  update: UpdateStatus | null
 }
 
 let state: State = {
@@ -62,7 +63,8 @@ let state: State = {
   profiles: [],
   pickingProfile: false,
   ramGb: 0,
-  enrich: null
+  enrich: null,
+  update: null
 }
 
 const listeners = new Set<() => void>()
@@ -261,6 +263,7 @@ export function initStore(): void {
   void refresh()
   void window.nexus.settings.get().then((settings) => setState({ settings }))
   void window.nexus.system().then(({ ramGb }) => setState({ ramGb }))
+  void window.nexus.update.status().then((update) => setState({ update }))
   // A cada abertura do app pergunta quem está jogando (a janela recriada depois de um jogo, não).
   void Promise.all([window.nexus.profiles.list(), window.nexus.profiles.active(), window.nexus.profiles.needsPick()]).then(
     ([profiles, profile, needsPick]) => setState({ profiles, profile, pickingProfile: needsPick })
@@ -305,6 +308,9 @@ export function initStore(): void {
       case 'achievement:unlocked':
         // A notificação por cima do jogo é do processo principal; aqui só atualiza contadores.
         if (document.hasFocus()) toast(`Conquista desbloqueada: ${ev.achievement.name}`)
+        break
+      case 'update:status':
+        setState({ update: ev.status })
         break
       case 'enrich:progress':
         setState({ enrich: ev.done >= ev.total ? null : { done: ev.done, total: ev.total } })
