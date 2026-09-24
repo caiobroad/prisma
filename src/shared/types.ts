@@ -357,8 +357,8 @@ export interface PrismaApi {
     update(id: number, patch: Partial<Pick<Profile, 'nickname' | 'avatar' | 'banner' | 'steamLinked'>>): Promise<Profile>
     remove(id: number): Promise<void>
     stats(id: number): Promise<ProfileStats>
-    /** Abre um seletor de imagem e devolve a imagem redimensionada como data URL. */
-    pickImage(kind: 'avatar' | 'banner'): Promise<string | null>
+    /** Abre um seletor de imagem e devolve o arquivo original; a interface recorta (respeitando o EXIF). */
+    pickImage(kind: 'avatar' | 'banner'): Promise<{ base64: string; type: string } | null>
   }
   friends: {
     list(): Promise<{ friends: Friend[]; mode: 'api' | 'local' | 'none'; message: string | null }>

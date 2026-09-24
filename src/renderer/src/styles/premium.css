@@ -1936,3 +1936,9 @@ small.fs-away {
   justify-content: flex-end;
   gap: 8px;
 }
+.prof-avatar-edit.rotate {
+  right: auto;
+  left: 4px;
+  background: var(--surface-3);
+  color: var(--ink);
+}

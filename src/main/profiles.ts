@@ -1,4 +1,6 @@
-import { BrowserWindow, dialog, nativeImage } from 'electron'
+import { BrowserWindow, dialog } from 'electron'
+import { readFileSync, statSync } from 'fs'
+import { extname } from 'path'
 import type { Profile } from '@shared/types'
 import { getDb } from './db'
 import { adoptOrphanSessions, getSetting, setSetting } from './db/games'
@@ -99,23 +101,22 @@ export function removeProfile(id: number): void {
   if (activeId === id) activeId = null
 }
 
-/** Seletor de imagem: recorta ao centro e reduz (avatar 256×256, banner 1600×500) em JPEG. */
-export async function pickImage(win: BrowserWindow | null, kind: 'avatar' | 'banner'): Promise<string | null> {
+/**
+ * Seletor de imagem: devolve o arquivo original (até 30 MB) para a interface recortar.
+ * O recorte fica no navegador porque ele respeita a orientação EXIF das fotos de celular;
+ * o nativeImage do Electron ignora e a foto saía deitada.
+ */
+export async function pickImage(win: BrowserWindow | null, kind: 'avatar' | 'banner'): Promise<{ base64: string; type: string } | null> {
   const opts: Electron.OpenDialogOptions = {
     title: kind === 'avatar' ? 'Escolher foto do perfil' : 'Escolher banner do perfil',
     properties: ['openFile'],
-    filters: [{ name: 'Imagens', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'] }]
+    filters: [{ name: 'Imagens', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'avif'] }]
   }
   const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
-  if (r.canceled || !r.filePaths[0]) return null
-  const img = nativeImage.createFromPath(r.filePaths[0])
-  if (img.isEmpty()) return null
-  const [tw, th] = kind === 'avatar' ? [256, 256] : [1600, 500]
-  const { width, height } = img.getSize()
-  const scale = Math.max(tw / width, th / height)
-  const cw = Math.round(tw / scale)
-  const ch = Math.round(th / scale)
-  const cropped = img.crop({ x: Math.round((width - cw) / 2), y: Math.round((height - ch) / 2), width: cw, height: ch })
-  const out = cropped.resize({ width: tw, height: th, quality: 'best' })
-  return 'data:image/jpeg;base64,' + out.toJPEG(kind === 'avatar' ? 88 : 82).toString('base64')
+  const file = r.filePaths[0]
+  if (r.canceled || !file) return null
+  if (statSync(file).size > 30 * 1024 * 1024) throw new Error('Imagem maior que 30 MB')
+  const ext = extname(file).slice(1).toLowerCase()
+  const type = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`
+  return { base64: readFileSync(file).toString('base64'), type }
 }

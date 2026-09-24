@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Friend, FriendLibrary, ProfileStats } from '@shared/types'
 import { Avatar } from '../components/Avatar'
 import { DnaRadar, renderDnaCard } from '../components/DnaRadar'
-import { IconCamera, IconCopy, IconEdit, IconExternal, IconShare, IconSwitch, IconUsers } from '../components/Icons'
+import { IconCamera, IconCopy, IconEdit, IconExternal, IconRotate, IconShare, IconSwitch, IconUsers } from '../components/Icons'
+import { AVATAR, BANNER, blobFromBase64, cropImage } from '../lib/image'
 import { ScrollView } from '../components/ScrollView'
 import { artStyle } from '../lib/covers'
 import { DNA_AXES, DNA_TITLES, dnaMatch, type Dna } from '../lib/dna'
@@ -54,11 +55,23 @@ export function ProfileView({ friend, onFriend, onFriends }: Props) {
 
   const pick = async (kind: 'avatar' | 'banner'): Promise<void> => {
     if (!me) return
-    const img = await window.nexus.profiles.pickImage(kind)
-    if (!img) return
-    await saveProfile(me.id, { [kind]: img })
+    try {
+      const file = await window.nexus.profiles.pickImage(kind)
+      if (!file) return
+      const img = await cropImage(blobFromBase64(file.base64, file.type), kind === 'avatar' ? AVATAR : BANNER)
+      await saveProfile(me.id, { [kind]: img })
+      invalidateSocial()
+      toast(kind === 'avatar' ? 'Foto atualizada' : 'Banner atualizado')
+    } catch (e) {
+      toast(`Não foi possível usar essa imagem: ${(e as Error).message.replace(/^.*Error: /, '')}`, 'err')
+    }
+  }
+
+  /** Gira a foto 90° no sentido horário (para fotos salvas antes da correção de orientação). */
+  const rotateAvatar = async (): Promise<void> => {
+    if (!me?.avatar) return
+    await saveProfile(me.id, { avatar: await cropImage(me.avatar, AVATAR, 90) })
     invalidateSocial()
-    toast(kind === 'avatar' ? 'Foto atualizada' : 'Banner atualizado')
   }
 
   const share = async (mode: 'save' | 'copy'): Promise<void> => {
@@ -105,9 +118,16 @@ export function ProfileView({ friend, onFriend, onFriends }: Props) {
           <div className="prof-avatar">
             <Avatar src={avatar} name={name} size={128} ring="var(--accent)" />
             {own ? (
-              <button className="prof-avatar-edit" onClick={() => void pick('avatar')} aria-label="Trocar foto" title="Trocar foto">
-                <IconCamera width={16} height={16} />
-              </button>
+              <>
+                <button className="prof-avatar-edit" onClick={() => void pick('avatar')} aria-label="Trocar foto" title="Trocar foto">
+                  <IconCamera width={16} height={16} />
+                </button>
+                {me?.avatar ? (
+                  <button className="prof-avatar-edit rotate" onClick={() => void rotateAvatar()} aria-label="Girar foto" title="Girar foto 90°">
+                    <IconRotate width={16} height={16} />
+                  </button>
+                ) : null}
+              </>
             ) : null}
           </div>
           <div className="prof-name">

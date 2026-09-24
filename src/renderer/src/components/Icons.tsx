@@ -273,3 +273,9 @@ export const IconSwitch = (p: P) => (
     <path d="M4.5 8.5h13l-3.5-3.5M19.5 15.5h-13l3.5 3.5" />
   </svg>
 )
+export const IconRotate = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3" />
+    <path d="M19.5 4.5v4.2h-4.2" />
+  </svg>
+)
