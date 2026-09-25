@@ -47,7 +47,8 @@ function streaks(days: Set<string>): { current: number; longest: number; runs: A
   return { current, longest, runs }
 }
 
-export function TimelineView({ onOpen }: Props) {
+/** embedded: dentro da aba do Perfil (sem rolagem própria nem título grande). */
+export function TimelineView({ onOpen, embedded }: Props & { embedded?: boolean }) {
   const byId = useStore((s) => s.byId)
   const games = useStore((s) => s.games)
   const [sessions, setSessions] = useState<Session[]>([])
@@ -155,10 +156,10 @@ export function TimelineView({ onOpen }: Props) {
   const firstOpened = selected ? data.sess.reduce<number | null>((m, s) => (m == null || s.startedAt < m ? s.startedAt : m), null) : null
 
   return (
-    <ScrollView className="timeline-view">
-      <header className="view-head">
+    <Wrap embedded={embedded}>
+      <header className={`view-head ${embedded ? 'embedded' : ''}`}>
         <div className="view-title">
-          <h1>Timeline Gamer</h1>
+          {embedded ? <h2>Timeline Gamer</h2> : <h1>Timeline Gamer</h1>}
           <p>Registrada automaticamente a partir das suas sessões, conquistas e do histórico das lojas</p>
         </div>
         <label className="select">
@@ -287,6 +288,10 @@ export function TimelineView({ onOpen }: Props) {
           ) : null}
         </div>
       )}
-    </ScrollView>
+    </Wrap>
   )
+}
+
+function Wrap({ embedded, children }: { embedded?: boolean; children: React.ReactNode }) {
+  return embedded ? <div className="timeline-view embedded">{children}</div> : <ScrollView className="timeline-view">{children}</ScrollView>
 }

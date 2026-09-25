@@ -67,6 +67,8 @@ export function createMainWindow(startHidden: boolean, onState: (s: WindowState)
       nodeIntegration: false,
       webSecurity: true,
       spellcheck: false,
+      // O som da introdução toca antes do primeiro clique.
+      autoplayPolicy: 'no-user-gesture-required',
       // Com a janela em segundo plano, o Chromium reduz timers e para de pintar.
       backgroundThrottling: true
     }

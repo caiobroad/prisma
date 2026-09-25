@@ -28,7 +28,7 @@ interface Parsed {
  * UserGameStatsSchema_<appid>.bin traz nomes e ícones; UserGameStats_<conta>_<appid>.bin
  * traz os bits desbloqueados e a hora de cada desbloqueio. Nada é baixado.
  */
-function readApp(statsDir: string, appid: string, files: string[]): Parsed[] | null {
+function readApp(statsDir: string, appid: string, files: string[], account: string | null): Parsed[] | null {
   const schemaFile = join(statsDir, `UserGameStatsSchema_${appid}.bin`)
   if (!existsSync(schemaFile)) return null
   let schema: BKV
@@ -41,10 +41,12 @@ function readApp(statsDir: string, appid: string, files: string[]): Parsed[] | n
   const stats = bkvObj(root?.stats)
   if (!stats) return null
 
-  // Desbloqueios de todas as contas desta máquina; fica a data mais antiga.
+  // Desbloqueios da conta Steam do perfil (ou de todas as contas do PC, se o perfil não
+  // escolheu uma); fica a data mais antiga.
   const unlocked = new Map<string, number>()
+  const prefix = account ? `UserGameStats_${account}_` : 'UserGameStats_'
   for (const f of files) {
-    if (!f.endsWith(`_${appid}.bin`) || !f.startsWith('UserGameStats_')) continue
+    if (!f.endsWith(`_${appid}.bin`) || !f.startsWith(prefix)) continue
     try {
       const s = parseBinaryKV(readFileSync(join(statsDir, f)))
       const cache = bkvObj(s.cache) ?? bkvObj(bkvObj(s[appid])?.cache)
@@ -92,7 +94,7 @@ function readApp(statsDir: string, appid: string, files: string[]): Parsed[] | n
 }
 
 /** Atualiza as conquistas de todos os jogos Steam da biblioteca (ou só dos ids pedidos). */
-export async function syncSteamAchievements(onlyGameIds?: number[]): Promise<number> {
+export async function syncSteamAchievements(onlyGameIds?: number[], account: string | null = null): Promise<number> {
   const steam = await findSteamPath()
   if (!steam) return 0
   const statsDir = join(steam, 'appcache', 'stats')
@@ -105,7 +107,7 @@ export async function syncSteamAchievements(onlyGameIds?: number[]): Promise<num
   }
   let n = 0
   for (const g of steamGamesForAchievements(onlyGameIds)) {
-    const list = readApp(statsDir, g.platformId, files)
+    const list = readApp(statsDir, g.platformId, files, account || null)
     if (!list) continue
     replaceAchievements(g.id, list)
     n += list.filter((a) => a.unlockedAt != null).length

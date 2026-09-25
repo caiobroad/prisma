@@ -24,4 +24,4 @@ export async function runAllScanners(): Promise<Record<Platform, ScannerOutput>>
   return out
 }
 
-export type { DetectedGame, Scanner, ScannerOutput } from './types'
+export type { DetectedGame, Scanner, ScannerOutput, SteamOwner } from './types'

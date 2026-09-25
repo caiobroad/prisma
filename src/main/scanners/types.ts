@@ -30,6 +30,17 @@ export interface ScannerOutput {
   ok: boolean
   /** Ids que a loja confirma não serem jogos (ferramentas, aplicativos). Saem da biblioteca mesmo com histórico. */
   notGames?: string[]
+  /** Steam: de qual conta do PC é cada jogo, com o tempo registrado por ela. */
+  owners?: SteamOwner[]
+  /** Steam: contas (id curto) com dados neste PC. */
+  accounts?: string[]
+}
+
+export interface SteamOwner {
+  account: string
+  appid: string
+  playtimeMin: number
+  lastPlayed: number | null
 }
 
 export interface Scanner {

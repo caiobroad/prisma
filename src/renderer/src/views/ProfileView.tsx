@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { Friend, FriendLibrary, ProfileStats } from '@shared/types'
+import type { Friend, FriendLibrary, Game, ProfileStats } from '@shared/types'
 import { Avatar } from '../components/Avatar'
 import { DnaRadar, renderDnaCard } from '../components/DnaRadar'
 import { IconCamera, IconCopy, IconEdit, IconExternal, IconRotate, IconShare, IconSwitch, IconUsers } from '../components/Icons'
@@ -10,16 +10,23 @@ import { DNA_AXES, DNA_TITLES, dnaMatch, type Dna } from '../lib/dna'
 import { formatDuration, formatHours } from '../lib/format'
 import { friendStatus, gamesByAppKey, invalidateSocial, libraryDna, useFriends, useLibrary } from '../lib/social'
 import { saveProfile, switchProfile, toast, useStore } from '../lib/store'
+import { TimelineView } from './TimelineView'
+
+export type ProfileTab = 'overview' | 'timeline'
 
 interface Props {
   /** Perfil de um amigo; ausente = o próprio perfil. */
   friend?: Friend | null
   onFriend: (f: Friend) => void
   onFriends: () => void
+  /** Aba do próprio perfil: visão geral ou Timeline Gamer. */
+  tab?: ProfileTab
+  onTab?: (t: ProfileTab) => void
+  onOpen?: (g: Game, key: string) => void
 }
 
 /** Página de perfil: banner, foto, estatísticas, Game DNA e comparações com amigos. */
-export function ProfileView({ friend, onFriend, onFriends }: Props) {
+export function ProfileView({ friend, onFriend, onFriends, tab = 'overview', onTab, onOpen }: Props) {
   const me = useStore((s) => s.profile)
   const profiles = useStore((s) => s.profiles)
   const games = useStore((s) => s.games)
@@ -157,7 +164,7 @@ export function ProfileView({ friend, onFriend, onFriends }: Props) {
             <p className="muted">
               {shownDna?.dominant ? DNA_TITLES[shownDna.dominant] : own ? 'Perfil neste PC' : friendStatus(friend!)}
               {!own && friend?.source === 'steam' ? ' · Steam' : ''}
-              {own && me?.steamLinked ? ' · dono da conta Steam deste PC' : ''}
+              {own && me?.steamAccount ? ' · conta Steam vinculada' : ''}
             </p>
           </div>
           <div className="prof-actions">
@@ -202,6 +209,24 @@ export function ProfileView({ friend, onFriend, onFriends }: Props) {
           )}
         </div>
 
+        {own && onTab ? (
+          <div className="page-tabs prof-tabs" role="tablist" aria-label="Seções do perfil">
+            {(
+              [
+                ['overview', 'Visão geral'],
+                ['timeline', 'Timeline Gamer']
+              ] as Array<[ProfileTab, string]>
+            ).map(([id, label]) => (
+              <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'on' : ''} onClick={() => onTab(id)}>
+                {label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+
+        {own && tab === 'timeline' && onOpen ? (
+          <TimelineView embedded onOpen={onOpen} />
+        ) : (
         <div className="prof-grid">
           <section className="glass card pad dna-card">
             <div className="section-head">
@@ -290,6 +315,7 @@ export function ProfileView({ friend, onFriend, onFriends }: Props) {
             ) : null}
           </div>
         </div>
+        )}
       </div>
     </ScrollView>
   )

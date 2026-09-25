@@ -2683,3 +2683,506 @@ small.fs-away {
   align-items: center;
   gap: 7px;
 }
+/* =========================================================
+   0.2.5: introdução, primeiro perfil, conta Steam, barra lateral,
+   aviso das chaves de API e Emulação
+   ========================================================= */
+
+/* ---------- Introdução ---------- */
+.intro {
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  background: radial-gradient(120% 90% at 50% 45%, #0d1224 0%, #05070d 62%, #020306 100%);
+  animation: introIn 1.2s ease both;
+  outline: none;
+}
+@keyframes introIn {
+  from {
+    opacity: 0;
+  }
+}
+.intro.leaving {
+  animation: introOut 0.72s var(--ease) both;
+  pointer-events: none;
+}
+@keyframes introOut {
+  to {
+    opacity: 0;
+    transform: scale(1.06);
+    filter: blur(10px) brightness(1.6);
+  }
+}
+/* Ondas de luz ao fundo: faixas largas e desfocadas que deslizam devagar. */
+.intro-waves {
+  position: absolute;
+  inset: -20% -30%;
+  pointer-events: none;
+  opacity: 0;
+  animation: fadeTo 2.4s 1s ease forwards;
+}
+@keyframes fadeTo {
+  to {
+    opacity: 1;
+  }
+}
+.intro-waves i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 34%;
+  top: 44%;
+  border-radius: 50%;
+  filter: blur(38px);
+  opacity: 0.32;
+  background: linear-gradient(90deg, transparent, #3dd9eb 30%, #7c9cff 55%, #c58bff 78%, transparent);
+  transform: rotate(-8deg);
+  animation: wave 16s ease-in-out infinite alternate;
+}
+.intro-waves i:nth-child(2) {
+  top: 52%;
+  height: 22%;
+  opacity: 0.22;
+  transform: rotate(-4deg);
+  animation-duration: 21s;
+  animation-delay: -6s;
+}
+.intro-waves i:nth-child(3) {
+  top: 38%;
+  height: 16%;
+  opacity: 0.16;
+  transform: rotate(-12deg);
+  animation-duration: 26s;
+  animation-delay: -12s;
+}
+@keyframes wave {
+  from {
+    translate: -8% 3%;
+  }
+  to {
+    translate: 8% -4%;
+  }
+}
+.intro-beam {
+  position: absolute;
+  left: -5%;
+  width: 51.6%;
+  top: calc(50% - 64px);
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9));
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.6);
+  transform-origin: right center;
+  transform: rotate(4deg) scaleX(0);
+  animation: introBeam 1s 0.25s cubic-bezier(0.6, 0, 0.2, 1) forwards;
+}
+@keyframes introBeam {
+  to {
+    transform: rotate(4deg) scaleX(1);
+  }
+}
+.intro-spectrum {
+  position: absolute;
+  left: 50%;
+  right: -5%;
+  top: calc(50% - 64px);
+  height: 0;
+}
+.intro-spectrum i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 3px;
+  transform-origin: left center;
+  transform: scaleX(0);
+  animation: introSpec 1.1s 1.05s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.intro-spectrum i:nth-child(1) {
+  background: linear-gradient(90deg, #3dd9eb, transparent);
+  box-shadow: 0 0 14px #3dd9eb;
+  rotate: -9deg;
+}
+.intro-spectrum i:nth-child(2) {
+  background: linear-gradient(90deg, #7c9cff, transparent);
+  box-shadow: 0 0 14px #7c9cff;
+  rotate: -1deg;
+  animation-delay: 1.12s;
+}
+.intro-spectrum i:nth-child(3) {
+  background: linear-gradient(90deg, #c58bff, transparent);
+  box-shadow: 0 0 14px #c58bff;
+  rotate: 8deg;
+  animation-delay: 1.19s;
+}
+@keyframes introSpec {
+  to {
+    transform: scaleX(1);
+  }
+}
+.intro-center {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+  color: #fff;
+  --accent: #7c9cff;
+  --accent-2: #3dd9eb;
+}
+.intro-mark .brand-mark {
+  width: 132px;
+  height: 132px;
+  opacity: 0;
+  transform: scale(0.8);
+  filter: drop-shadow(0 0 30px rgba(124, 156, 255, 0.85));
+  animation: introMark 1.2s 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+@keyframes introMark {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.intro-word {
+  font-family: var(--display);
+  font-size: clamp(40px, 6vw, 68px);
+  font-weight: 600;
+  letter-spacing: 0.5em;
+  margin-right: -0.5em;
+  opacity: 0;
+  animation: introWord 1.6s 1.6s var(--ease) forwards;
+}
+@keyframes introWord {
+  from {
+    letter-spacing: 1em;
+    filter: blur(8px);
+  }
+  to {
+    opacity: 1;
+    letter-spacing: 0.5em;
+    filter: none;
+  }
+}
+.intro-sub {
+  color: rgba(220, 228, 245, 0.72);
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  opacity: 0;
+  animation: fadeTo 1.2s 2.3s ease forwards;
+}
+.intro-cta {
+  position: absolute;
+  bottom: 13%;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+.intro.ready .intro-cta {
+  opacity: 1;
+}
+.intro-cta span {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  animation: ctaPulse 2.4s ease-in-out infinite;
+}
+@keyframes ctaPulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+.intro-cta small {
+  font-size: 12.5px;
+  color: rgba(220, 228, 245, 0.5);
+}
+.intro-by {
+  position: absolute;
+  bottom: 28px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: rgba(220, 228, 245, 0.42);
+  opacity: 0;
+  animation: fadeTo 1.2s 2.8s ease forwards;
+}
+.intro-by b {
+  color: rgba(240, 244, 252, 0.72);
+  font-weight: 600;
+}
+
+/* ---------- Primeiro perfil e conta Steam ---------- */
+.psel.first .psel-inner {
+  max-width: 640px;
+  gap: 8px;
+}
+.psel.first .psel-inner h1 {
+  margin-bottom: 4px;
+}
+.psel-mark .brand-mark {
+  width: 70px;
+  height: 70px;
+  filter: drop-shadow(0 0 24px color-mix(in srgb, var(--accent) 60%, transparent));
+}
+.psel-lead {
+  max-width: 520px;
+  color: var(--ink-2);
+  font-size: 14.5px;
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+.psel-form {
+  display: grid;
+  gap: 18px;
+  width: min(560px, calc(100vw - 48px));
+  padding: 22px;
+  border-radius: var(--r-xl);
+  text-align: left;
+  background: var(--pane) !important;
+  animation: popIn 0.4s var(--ease) both;
+}
+.psel-field {
+  display: grid;
+  gap: 8px;
+}
+.psel-field > span {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.psel-field > small {
+  margin-top: -4px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.psel-field .input {
+  height: 44px;
+  font-size: 15px;
+}
+.psel-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.sacc-list {
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.sacc-list.loading {
+  height: 60px;
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.sacc {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+}
+.sacc:hover,
+.sacc:focus-visible {
+  background: var(--surface-2);
+  border-color: var(--line-2);
+}
+.sacc.on {
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.sacc > svg {
+  color: var(--accent-ink);
+}
+.sacc b {
+  display: block;
+  font-size: 14px;
+}
+.sacc small {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.sacc-none-ico {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 1px dashed var(--line-2);
+  color: var(--ink-3);
+}
+
+/* ---------- Barra lateral ---------- */
+.side-actions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.side-item.action {
+  height: 40px;
+  color: var(--ink-2);
+}
+.side-item.action.pad:hover {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+.side-kbd {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: var(--ink-3);
+  border: 1px solid var(--line-2);
+}
+
+/* ---------- Aviso das chaves de API ---------- */
+.api-warn {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  margin: 4px 28px 8px;
+  padding: 14px 16px;
+  border-radius: var(--r-md);
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  background: color-mix(in srgb, var(--warn) 9%, transparent);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.api-warn-ico {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-weight: 800;
+  color: #1c1405;
+  background: var(--warn);
+}
+.api-warn > div > b {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--ink);
+  font-size: 14px;
+}
+.api-warn ul {
+  display: grid;
+  gap: 4px;
+  padding-left: 16px;
+  list-style: disc;
+}
+.api-warn li b {
+  color: var(--ink);
+}
+.set.two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
+}
+.set.two .it {
+  border-bottom: 0;
+}
+.set .it code {
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface-2);
+}
+.card.flash {
+  animation: cardFlash 1.6s var(--ease);
+}
+@keyframes cardFlash {
+  0%,
+  40% {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 70%, transparent), 0 0 40px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+}
+
+/* ---------- Biblioteca e Emulação ---------- */
+.lib-notice {
+  margin-bottom: 18px;
+  line-height: 1.45;
+}
+.lib-notice b {
+  color: var(--ink);
+}
+.chip em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-left: 2px;
+}
+.emu-empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  max-width: 640px;
+  margin: 24px auto;
+  padding: 34px 30px;
+  border-radius: var(--r-xl);
+  text-align: center;
+  color: var(--ink-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+.emu-empty > b {
+  font-family: var(--display);
+  font-size: 22px;
+  color: var(--ink);
+}
+.emu-empty-ico {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 22px;
+  color: #fff;
+  background: linear-gradient(135deg, #ff7ad9, #8f6bff);
+  box-shadow: 0 12px 34px rgba(255, 122, 217, 0.35);
+}
+.emu-empty ol {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 8px;
+  padding-left: 20px;
+  text-align: left;
+}
+
+/* ---------- Perfil com abas ---------- */
+.prof-tabs {
+  margin: 10px 0 20px;
+}
+.timeline-view.embedded .view-head.embedded {
+  margin-top: 0;
+}
+.timeline-view.embedded .view-head.embedded h2 {
+  font-family: var(--display);
+  font-size: 22px;
+}.timeline-view.embedded {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.timeline-view.embedded > .view-head {
+  margin-bottom: 0;
+}

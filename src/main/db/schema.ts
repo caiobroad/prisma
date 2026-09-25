@@ -68,6 +68,17 @@ CREATE TABLE IF NOT EXISTS app_tags (
   fetched_at INTEGER NOT NULL
 );
 
+-- Jogos de cada conta Steam deste PC (várias contas podem usar o mesmo cliente Steam).
+-- source: 'local' (jogados/instalados, lidos do disco) ou 'api' (lista completa pela Steam Web API).
+CREATE TABLE IF NOT EXISTS steam_owned (
+  account      TEXT    NOT NULL,
+  appid        TEXT    NOT NULL,
+  playtime_min INTEGER NOT NULL DEFAULT 0,
+  last_played  INTEGER,
+  source       TEXT    NOT NULL DEFAULT 'local',
+  PRIMARY KEY (account, appid, source)
+);
+
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL

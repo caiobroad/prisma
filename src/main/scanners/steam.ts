@@ -3,7 +3,7 @@ import { join } from 'path'
 import { regQuery } from '../util/exec'
 import { parseVdf, vdfGet, type VdfObject } from '../util/vdf'
 import { readAppInfo, kvObj, kvStr, type KV } from '../util/appinfo'
-import { localAsset, type DetectedGame, type Scanner, type ScannerOutput } from './types'
+import { localAsset, type DetectedGame, type Scanner, type ScannerOutput, type SteamOwner } from './types'
 
 /** Gêneros da Steam (ids do appinfo) traduzidos. */
 const GENRES: Record<string, string> = {
@@ -21,7 +21,7 @@ const GENRES: Record<string, string> = {
   '70': 'Acesso antecipado'
 }
 
-const CDN = 'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps'
+export const CDN = 'https://shared.fastly.steamstatic.com/store_item_assets/steam/apps'
 
 export async function findSteamPath(): Promise<string | null> {
   const candidates = [
@@ -63,6 +63,8 @@ interface Installed {
   dir: string | null
   installed: boolean
   size: number | null
+  /** Conta (id curto) que instalou o jogo: campo LastOwner do manifesto (SteamID64). */
+  owner: string | null
 }
 
 function installedApps(steamPath: string): { apps: Map<string, Installed>; libs: number } {
@@ -89,7 +91,9 @@ function installedApps(steamPath: string): { apps: Map<string, Installed>; libs:
         if (!appid || apps.has(appid)) continue
         const exists = existsSync(dir)
         const size = Number(vdfGet(st, 'SizeOnDisk') ?? 0)
-        apps.set(appid, { name, dir: exists ? dir : null, installed: (flags & 4) === 4 && exists, size: size > 0 ? size : null })
+        const last = String(vdfGet(st, 'LastOwner') ?? '')
+        const owner = /^\d{17}$/.test(last) && last !== '0' ? (BigInt(last) - 76561197960265728n).toString() : null
+        apps.set(appid, { name, dir: exists ? dir : null, installed: (flags & 4) === 4 && exists, size: size > 0 ? size : null, owner })
       } catch {
         /* manifesto ilegível */
       }
@@ -140,17 +144,22 @@ interface LocalStats {
   lastPlayed: number
 }
 
-/** Tempo de jogo e última sessão por app, somando todos os usuários logados nesta máquina. */
-function localConfig(steamPath: string): Map<string, LocalStats> {
+/**
+ * Tempo de jogo e última sessão por app de cada conta que já entrou na Steam deste PC
+ * (userdata/<conta>/config/localconfig.vdf). `merged` junta todas as contas.
+ */
+function localConfig(steamPath: string): { merged: Map<string, LocalStats>; perAccount: Map<string, Map<string, LocalStats>> } {
   const out = new Map<string, LocalStats>()
+  const perAccount = new Map<string, Map<string, LocalStats>>()
   const userdata = join(steamPath, 'userdata')
   let users: string[] = []
   try {
-    users = readdirSync(userdata)
+    users = readdirSync(userdata).filter((u) => /^\d+$/.test(u) && u !== '0')
   } catch {
-    return out
+    return { merged: out, perAccount }
   }
   for (const u of users) {
+    const mine = new Map<string, LocalStats>()
     const f = join(userdata, u, 'config', 'localconfig.vdf')
     if (!existsSync(f)) continue
     try {
@@ -165,17 +174,19 @@ function localConfig(steamPath: string): Map<string, LocalStats> {
         if (!/^\d+$/.test(id) || typeof v !== 'object') continue
         const pt = Number(vdfGet(v, 'Playtime') ?? 0)
         const lp = Number(vdfGet(v, 'LastPlayed') ?? 0)
+        mine.set(id, { playtimeMin: pt, lastPlayed: lp })
         const prev = out.get(id)
         out.set(id, {
           playtimeMin: Math.max(prev?.playtimeMin ?? 0, pt),
           lastPlayed: Math.max(prev?.lastPlayed ?? 0, lp)
         })
       }
+      perAccount.set(u, mine)
     } catch {
       /* localconfig ilegível */
     }
   }
-  return out
+  return { merged: out, perAccount }
 }
 
 function assetPath(common: KV | undefined, key: string, variant: 'image' | 'image2x' = 'image'): string | undefined {
@@ -192,7 +203,7 @@ export const steamScanner: Scanner = {
 
     const { apps: installed, libs } = installedApps(steamPath)
     const cache = libraryCache(steamPath)
-    const local = localConfig(steamPath)
+    const { merged: local, perAccount } = localConfig(steamPath)
 
     // Candidatos: tudo que está instalado, no cache da biblioteca ou no histórico local.
     const candidates = new Set<string>([...installed.keys(), ...cache.keys(), ...local.keys()])
@@ -287,9 +298,22 @@ export const steamScanner: Scanner = {
       })
     }
     const inst = games.filter((g) => g.installed).length
+    // De quem é cada jogo: o que a conta já jogou (localconfig) e o que ela instalou (LastOwner).
+    const isGame = new Set(games.map((g) => g.platformId))
+    const owners: SteamOwner[] = []
+    for (const [account, apps] of perAccount) {
+      for (const [appid, st] of apps) {
+        if (isGame.has(appid)) owners.push({ account, appid, playtimeMin: st.playtimeMin, lastPlayed: st.lastPlayed ? st.lastPlayed * 1000 : null })
+      }
+    }
+    for (const [appid, a] of installed) {
+      if (a.owner && isGame.has(appid) && !perAccount.get(a.owner)?.has(appid)) owners.push({ account: a.owner, appid, playtimeMin: 0, lastPlayed: null })
+    }
     return {
       games,
       notGames,
+      owners,
+      accounts: [...new Set([...perAccount.keys(), ...[...installed.values()].map((a) => a.owner).filter((o): o is string => !!o)])],
       ok: true,
       detail: `${inst} instalados · ${libs} biblioteca${libs === 1 ? '' : 's'} · appinfo.vdf`
     }

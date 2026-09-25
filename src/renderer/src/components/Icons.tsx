@@ -317,3 +317,13 @@ export const IconSparkles = (p: P) => (
     <path d="M12 3.5l1.8 4.7 4.7 1.8-4.7 1.8L12 16.5l-1.8-4.7L5.5 10l4.7-1.8zM18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" />
   </svg>
 )
+/** Portátil retrô (Emulação). */
+export const IconRetro = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="6" y="2.8" width="12" height="18.4" rx="2" />
+    <rect x="8.4" y="5.2" width="7.2" height="5.6" rx="0.8" />
+    <path d="M9.6 14v3M8.1 15.5h3" />
+    <circle cx="14.9" cy="14.6" r="0.9" />
+    <circle cx="13.3" cy="16.6" r="0.9" />
+  </svg>
+)

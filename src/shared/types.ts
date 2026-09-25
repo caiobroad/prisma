@@ -174,10 +174,40 @@ export interface Profile {
   avatar: string | null
   /** Data URL (1600×500 JPEG). */
   banner: string | null
-  /** Este perfil é o dono da conta Steam desta máquina: soma o tempo registrado pela Steam. */
+  /** Este perfil usa uma conta Steam: soma o tempo registrado pela Steam. */
   steamLinked: boolean
+  /**
+   * Conta Steam do perfil (id curto da conta). null = perfil anterior à escolha de conta (vê a
+   * biblioteca Steam inteira do PC); '' = perfil sem Steam.
+   */
+  steamAccount: string | null
   createdAt: number
   lastUsed: number | null
+}
+
+/** Conta que já entrou no cliente Steam deste PC (config/loginusers.vdf). */
+export interface SteamAccount {
+  /** Id curto da conta (pasta em userdata). */
+  accountId: string
+  steamId: string
+  /** Nome exibido na Steam (PersonaName). O login da conta nunca sai do main. */
+  name: string
+  /** Avatar do cache do cliente Steam (data URL), quando existe. */
+  avatar: string | null
+  mostRecent: boolean
+}
+
+/** Situação da biblioteca Steam do perfil ativo, para avisos na Biblioteca. */
+export interface SteamLibraryInfo {
+  account: SteamAccount | null
+  /** Há mais de uma conta Steam neste PC (a biblioteca está sendo separada por conta). */
+  multi: boolean
+  /** A lista veio da Steam Web API: inclui os jogos nunca jogados. */
+  complete: boolean
+  /** Jogos conhecidos desta conta. */
+  known: number
+  /** Perfil ainda sem conta escolhida (vê as bibliotecas de todas as contas do PC). */
+  unset: boolean
 }
 
 export interface ProfileStats {
@@ -448,12 +478,17 @@ export interface PrismaApi {
     needsPick(): Promise<boolean>
     /** Ativa um perfil: ajustes, sessões e estatísticas passam a ser dele. */
     select(id: number): Promise<Settings>
-    create(nickname: string): Promise<Profile>
-    update(id: number, patch: Partial<Pick<Profile, 'nickname' | 'avatar' | 'banner' | 'steamLinked'>>): Promise<Profile>
+    create(nickname: string, steamAccount: string): Promise<Profile>
+    update(id: number, patch: Partial<Pick<Profile, 'nickname' | 'avatar' | 'banner' | 'steamLinked' | 'steamAccount'>>): Promise<Profile>
     remove(id: number): Promise<void>
     stats(id: number): Promise<ProfileStats>
     /** Abre um seletor de imagem e devolve o arquivo original; a interface recorta (respeitando o EXIF). */
     pickImage(kind: 'avatar' | 'banner'): Promise<{ base64: string; type: string } | null>
+  }
+  steam: {
+    /** Contas que já entraram na Steam deste PC. */
+    accounts(): Promise<SteamAccount[]>
+    libraryInfo(): Promise<SteamLibraryInfo | null>
   }
   friends: {
     list(): Promise<{ friends: Friend[]; mode: 'api' | 'local' | 'none'; message: string | null }>

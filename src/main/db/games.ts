@@ -123,11 +123,69 @@ function fakeGames(base: Game[]): Game[] {
   return out
 }
 
-export function listGames(): Game[] {
+type SteamRowish = Pick<GameRow, 'platform' | 'platform_id' | 'platform_playtime_sec' | 'platform_last_played'>
+
+/**
+ * Jogos da Steam que a conta do perfil enxerga, com o tempo e a última sessão dela.
+ * account: null = perfil antigo (vê tudo, como antes); '' = perfil sem Steam; '<id>' = só os jogos da conta.
+ * Com uma única conta Steam no PC não há o que separar: tudo é dela.
+ */
+function steamFilter<T extends SteamRowish>(account: string | null): ((r: T) => T | null) | null {
+  if (account == null) return null
+  if (account === '') return (r) => (r.platform === 'steam' ? null : r)
+  const db = getDb()
+  const accounts = Number((db.prepare('SELECT COUNT(DISTINCT account) AS n FROM steam_owned').get() as { n: number }).n)
+  const rows = db
+    .prepare('SELECT appid, MAX(playtime_min) AS p, MAX(last_played) AS l FROM steam_owned WHERE account = ? GROUP BY appid')
+    .all(account) as unknown as Array<{ appid: string; p: number; l: number | null }>
+  const mine = new Map(rows.map((r) => [String(r.appid), r]))
+  const everything = accounts === 0 || (accounts === 1 && mine.size > 0)
+  return (r) => {
+    if (r.platform !== 'steam') return r
+    const m = mine.get(r.platform_id)
+    if (!m) return everything ? r : null
+    return { ...r, platform_playtime_sec: Number(m.p) * 60, platform_last_played: m.l == null ? null : Number(m.l) }
+  }
+}
+
+export function listGames(steamAccount: string | null = null): Game[] {
   const counts = achievementCounts()
-  const rows = getDb().prepare('SELECT * FROM games ORDER BY title COLLATE NOCASE').all() as unknown as GameRow[]
+  let rows = getDb().prepare('SELECT * FROM games ORDER BY title COLLATE NOCASE').all() as unknown as GameRow[]
+  const f = steamFilter<GameRow>(steamAccount)
+  if (f) rows = rows.map(f).filter((r): r is GameRow => r != null)
   const games = rows.map((r) => toGame(r, counts.get(Number(r.id))))
   return games.concat(fakeGames(games))
+}
+
+// ---------- contas Steam ----------
+
+/** Troca o que se sabe do disco (jogados e instalados de cada conta). A lista da Web API fica. */
+export function saveSteamOwners(owners: Array<{ account: string; appid: string; playtimeMin: number; lastPlayed: number | null }>): void {
+  transaction(() => {
+    const db = getDb()
+    db.prepare("DELETE FROM steam_owned WHERE source = 'local'").run()
+    const ins = db.prepare("INSERT OR REPLACE INTO steam_owned (account, appid, playtime_min, last_played, source) VALUES (?, ?, ?, ?, 'local')")
+    for (const o of owners) ins.run(o.account, o.appid, o.playtimeMin, o.lastPlayed)
+  })
+}
+
+/** Lista completa da conta pela Steam Web API (GetOwnedGames). */
+export function saveApiOwned(account: string, games: Array<{ appid: string; playtimeMin: number; lastPlayed: number | null }>): void {
+  transaction(() => {
+    const db = getDb()
+    db.prepare("DELETE FROM steam_owned WHERE account = ? AND source = 'api'").run(account)
+    const ins = db.prepare("INSERT OR REPLACE INTO steam_owned (account, appid, playtime_min, last_played, source) VALUES (?, ?, ?, ?, 'api')")
+    for (const g of games) ins.run(account, g.appid, g.playtimeMin, g.lastPlayed)
+  })
+}
+
+/** Quantas contas Steam o PC tem e se a lista desta conta está completa (veio da Web API). */
+export function steamOwnershipInfo(account: string): { accounts: number; complete: boolean; known: number } {
+  const db = getDb()
+  const accounts = Number((db.prepare('SELECT COUNT(DISTINCT account) AS n FROM steam_owned').get() as { n: number }).n)
+  const api = Number((db.prepare("SELECT COUNT(*) AS n FROM steam_owned WHERE account = ? AND source = 'api'").get(account) as { n: number }).n)
+  const known = Number((db.prepare('SELECT COUNT(DISTINCT appid) AS n FROM steam_owned WHERE account = ?').get(account) as { n: number }).n)
+  return { accounts, complete: api > 0, known }
 }
 
 export function getGame(id: number): Game | null {
@@ -534,7 +592,7 @@ export function adoptOrphanSessions(profileId: number): void {
   getDb().prepare('UPDATE sessions SET profile_id = ? WHERE profile_id IS NULL').run(profileId)
 }
 
-export function profileStats(profileId: number, includePlatform: boolean, top = 12): ProfileStats {
+export function profileStats(profileId: number, includePlatform: boolean, top = 12, steamAccount: string | null = null): ProfileStats {
   const db = getDb()
   const s = db
     .prepare(
@@ -549,8 +607,12 @@ export function profileStats(profileId: number, includePlatform: boolean, top = 
   let achievements = 0
   if (includePlatform) {
     // O dono da conta Steam desta máquina herda o tempo registrado pelas lojas.
-    const plat = db.prepare('SELECT id, platform_playtime_sec AS p FROM games WHERE platform_playtime_sec > 0').all() as unknown as Array<{ id: number; p: number }>
-    for (const r of plat) totals.set(Number(r.id), (totals.get(Number(r.id)) ?? 0) + Number(r.p))
+    // Com uma conta Steam escolhida, vale o tempo registrado por ela.
+    type PlatRow = SteamRowish & { id: number }
+    let plat = db.prepare('SELECT id, platform, platform_id, platform_playtime_sec, platform_last_played FROM games').all() as unknown as PlatRow[]
+    const f = steamFilter<PlatRow>(steamAccount)
+    if (f) plat = plat.map(f).filter((r): r is PlatRow => r != null)
+    for (const r of plat) if (Number(r.platform_playtime_sec) > 0) totals.set(Number(r.id), (totals.get(Number(r.id)) ?? 0) + Number(r.platform_playtime_sec))
     achievements = Number((db.prepare('SELECT COUNT(*) AS n FROM achievements WHERE unlocked_at IS NOT NULL').get() as { n: number }).n)
   }
   const topGames = [...totals.entries()]
@@ -685,13 +747,21 @@ export function emuCounts(): Record<string, number> {
 }
 
 /** Jogo aberto mais recentemente (sessão no Prisma ou registro da loja). */
-export function lastPlayedGameId(): number | null {
-  const r = getDb()
-    .prepare(
-      'SELECT id FROM games WHERE MAX(COALESCE(last_played, 0), COALESCE(platform_last_played, 0)) > 0 ORDER BY MAX(COALESCE(last_played, 0), COALESCE(platform_last_played, 0)) DESC LIMIT 1'
-    )
-    .get() as { id: number } | undefined
-  return r ? Number(r.id) : null
+export function lastPlayedGameId(steamAccount: string | null = null): number | null {
+  type Row = SteamRowish & { id: number; last_played: number | null }
+  let rows = getDb().prepare('SELECT id, platform, platform_id, platform_playtime_sec, platform_last_played, last_played FROM games').all() as unknown as Row[]
+  const f = steamFilter<Row>(steamAccount)
+  if (f) rows = rows.map(f).filter((r): r is Row => r != null)
+  let best: Row | null = null
+  let bestAt = 0
+  for (const r of rows) {
+    const at = Math.max(Number(r.last_played ?? 0), Number(r.platform_last_played ?? 0))
+    if (at > bestAt) {
+      bestAt = at
+      best = r
+    }
+  }
+  return best ? Number(best.id) : null
 }
 
 // ---------- settings ----------

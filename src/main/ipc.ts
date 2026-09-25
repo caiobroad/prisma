@@ -42,7 +42,10 @@ import { changelog, checkNow, getUpdateStatus, installNow, openPortableDownload 
 import { loadStore, searchStore } from './storefront'
 import { reviewsFor, workshopFor } from './steamExtra'
 import { detectEmulators, EMULATORS, loadEmuConfig, pickEmuPath, refreshEmuGames, saveEmuConfig, suggestCloudDir, syncSaves } from './emulators'
-import { emuCounts, lastPlayedGameId } from './db/games'
+import { emuCounts, lastPlayedGameId, saveApiOwned, saveSteamOwners, steamOwnershipInfo } from './db/games'
+import { apiOwnedGames, listSteamAccounts } from './steamAccounts'
+import { CDN as STEAM_CDN } from './scanners/steam'
+import type { DetectedGame } from './scanners'
 
 export interface WindowHost {
   getWindow(): BrowserWindow | null
@@ -59,15 +62,51 @@ export function broadcast(ev: MainEvent): void {
   }
 }
 
+/** Conta Steam do perfil ativo (null = perfil antigo, vê tudo; '' = sem Steam). */
+export function currentSteamAccount(): string | null {
+  const id = activeProfileId()
+  return id == null ? null : (getProfile(id)?.steamAccount ?? null)
+}
+
+function apiGame(g: { appid: string; name: string; icon: string | null }): DetectedGame {
+  return {
+    platform: 'steam',
+    platformId: g.appid,
+    title: g.name,
+    installDir: null,
+    exePath: null,
+    launchUri: `steam://rungameid/${g.appid}`,
+    coverUrl: `${STEAM_CDN}/${g.appid}/library_600x900.jpg`,
+    bannerUrl: `${STEAM_CDN}/${g.appid}/library_hero.jpg`,
+    logoUrl: `${STEAM_CDN}/${g.appid}/logo.png`,
+    iconUrl: g.icon,
+    installed: false
+  }
+}
+
 export function scanLibraries(): Promise<ScanResult> {
   if (scanning) return scanning
   scanning = (async () => {
     const t0 = Date.now()
     broadcast({ type: 'scan:started' })
-    const results = await runAllScanners()
+    const [results, api] = await Promise.all([runAllScanners(), apiOwnedGames().catch(() => [])])
     let added = 0
     let updated = 0
     let removed = 0
+    const steam = results.steam
+    if (steam?.ok) {
+      // Jogos que só a Steam Web API conhece (nunca jogados nem instalados neste PC).
+      const seen = new Set(steam.games.map((g) => g.platformId))
+      for (const a of api) {
+        for (const g of a.games) {
+          if (seen.has(g.appid)) continue
+          seen.add(g.appid)
+          steam.games.push(apiGame(g))
+        }
+        saveApiOwned(a.account, a.games)
+      }
+      saveSteamOwners(steam.owners ?? [])
+    }
     for (const [platform, r] of Object.entries(results)) {
       const p = platform as keyof typeof results
       if (p !== 'manual' && r.ok) {
@@ -78,7 +117,7 @@ export function scanLibraries(): Promise<ScanResult> {
       }
       updateSource({ platform: p, count: r.games.length, lastScan: Date.now(), detail: r.detail, ok: r.ok })
     }
-    await syncSteamAchievements().catch(() => 0)
+    await syncSteamAchievements(undefined, currentSteamAccount()).catch(() => 0)
     try {
       const [ea, er] = refreshEmuGames()
       added += ea
@@ -102,7 +141,7 @@ export function scanLibraries(): Promise<ScanResult> {
 export function registerIpc(host: WindowHost, onSettings: (s: Settings) => void): void {
   const getWindow = host.getWindow
 
-  ipcMain.handle('games:list', () => listGames())
+  ipcMain.handle('games:list', () => listGames(currentSteamAccount()))
   ipcMain.handle('games:scan', () => scanLibraries())
   ipcMain.handle('games:launch', async (_e, id: number, opts?: LaunchOptions) => {
     const g = getGame(id)
@@ -174,15 +213,39 @@ export function registerIpc(host: WindowHost, onSettings: (s: Settings) => void)
     return id == null ? null : getProfile(id)
   })
   ipcMain.handle('profiles:select', (_e, id: number) => {
+    const before = currentSteamAccount()
     selectProfile(id)
     const s = loadSettings()
     onSettings(s)
+    // Outra conta Steam: as conquistas lidas do disco passam a ser as dela.
+    if (currentSteamAccount() !== before) void syncSteamAchievements(undefined, currentSteamAccount()).then(() => broadcast({ type: 'games:changed' }))
     return s
   })
-  ipcMain.handle('profiles:create', (_e, nickname: string) => createProfile(nickname))
-  ipcMain.handle('profiles:update', (_e, id: number, patch: Parameters<typeof updateProfile>[1]) => updateProfile(id, patch))
+  ipcMain.handle('profiles:create', (_e, nickname: string, steamAccount?: string) => createProfile(nickname, steamAccount ?? ''))
+  ipcMain.handle('profiles:update', (_e, id: number, patch: Parameters<typeof updateProfile>[1]) => {
+    const p = updateProfile(id, patch)
+    if (patch.steamAccount !== undefined && id === activeProfileId()) {
+      void syncSteamAchievements(undefined, currentSteamAccount()).then(() => broadcast({ type: 'games:changed' }))
+      if (p.steamAccount) void scanLibraries()
+    }
+    return p
+  })
   ipcMain.handle('profiles:remove', (_e, id: number) => removeProfile(id))
-  ipcMain.handle('profiles:stats', (_e, id: number) => profileStats(id, !!getProfile(id)?.steamLinked))
+  ipcMain.handle('profiles:stats', (_e, id: number) => {
+    const p = getProfile(id)
+    return profileStats(id, !!p?.steamLinked, 12, p?.steamAccount ?? null)
+  })
+  ipcMain.handle('steam:accounts', () => listSteamAccounts())
+  ipcMain.handle('steam:libraryInfo', async () => {
+    const account = currentSteamAccount()
+    if (account === '') return null
+    const all = await listSteamAccounts()
+    // Perfil de antes da escolha de conta: vê todas; o aviso pede para escolher.
+    if (account == null) return { account: null, multi: all.length > 1, complete: false, known: 0, unset: true }
+    const info = steamOwnershipInfo(account)
+    const acc = all.find((a) => a.accountId === account) ?? null
+    return { account: acc, multi: info.accounts > 1, complete: info.complete, known: info.known, unset: false }
+  })
   ipcMain.handle('profiles:pickImage', (_e, kind: 'avatar' | 'banner') => pickImage(getWindow(), kind))
 
   ipcMain.handle('friends:list', () => listFriends())
@@ -213,8 +276,11 @@ export function registerIpc(host: WindowHost, onSettings: (s: Settings) => void)
 
   ipcMain.handle('settings:get', () => loadSettings())
   ipcMain.handle('settings:set', (_e, patch: Partial<Settings>) => {
+    const keyChanged = patch.steamApiKey !== undefined && patch.steamApiKey !== loadSettings().steamApiKey
     const s = saveSettings(patch)
     onSettings(s)
+    // Chave nova da Steam Web API: busca a lista completa de jogos da conta.
+    if (keyChanged && s.steamApiKey) void scanLibraries()
     return s
   })
 
@@ -265,7 +331,7 @@ export function registerIpc(host: WindowHost, onSettings: (s: Settings) => void)
   ipcMain.handle('games:reviews', (_e, id: number) => reviewsFor(id))
   ipcMain.handle('games:workshop', (_e, id: number) => workshopFor(id))
   ipcMain.handle('games:lastPlayed', () => {
-    const id = lastPlayedGameId()
+    const id = lastPlayedGameId(currentSteamAccount())
     return id == null ? null : { gameId: id, resume: lastResume(id, activeProfileId()) }
   })
   const emuInfo = () => ({
@@ -320,7 +386,7 @@ export function registerIpc(host: WindowHost, onSettings: (s: Settings) => void)
     if (ev.type === 'started') {
       broadcast({ type: 'session:started', gameId: ev.gameId })
       resumeStarted(ev.sessionId)
-      void syncSteamAchievements([ev.gameId]).finally(() =>
+      void syncSteamAchievements([ev.gameId], currentSteamAccount()).finally(() =>
         watchAchievements(ev.game, (achievement) => broadcast({ type: 'achievement:unlocked', achievement, gameTitle: ev.game.title }))
       )
     } else {
@@ -328,7 +394,7 @@ export function registerIpc(host: WindowHost, onSettings: (s: Settings) => void)
       // Jogo de emulador: manda os saves novos para a pasta da nuvem.
       if (ev.game.emuSystem) syncSaves(ev.game, 'push')
       // Conquistas e screenshot da sessão que acabou de terminar: Timeline e Smart Resume.
-      void Promise.all([syncSteamAchievements([ev.gameId]).catch(() => 0), resumeEnded(ev.sessionId, ev.game, ev.startedAt)]).finally(() => {
+      void Promise.all([syncSteamAchievements([ev.gameId], currentSteamAccount()).catch(() => 0), resumeEnded(ev.sessionId, ev.game, ev.startedAt)]).finally(() => {
         broadcast({ type: 'session:ended', gameId: ev.gameId, durationSeconds: ev.durationSeconds })
       })
     }

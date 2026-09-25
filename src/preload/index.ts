@@ -30,11 +30,15 @@ const api: PrismaApi = {
     active: () => ipcRenderer.invoke('profiles:active'),
     needsPick: () => ipcRenderer.invoke('profiles:needsPick'),
     select: (id) => ipcRenderer.invoke('profiles:select', id),
-    create: (nickname) => ipcRenderer.invoke('profiles:create', nickname),
+    create: (nickname, steamAccount) => ipcRenderer.invoke('profiles:create', nickname, steamAccount),
     update: (id, patch) => ipcRenderer.invoke('profiles:update', id, patch),
     remove: (id) => ipcRenderer.invoke('profiles:remove', id),
     stats: (id) => ipcRenderer.invoke('profiles:stats', id),
     pickImage: (kind) => ipcRenderer.invoke('profiles:pickImage', kind)
+  },
+  steam: {
+    accounts: () => ipcRenderer.invoke('steam:accounts'),
+    libraryInfo: () => ipcRenderer.invoke('steam:libraryInfo')
   },
   friends: {
     list: () => ipcRenderer.invoke('friends:list'),

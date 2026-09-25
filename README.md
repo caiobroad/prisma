@@ -32,24 +32,33 @@ Teste de carga: `NEXUS_FAKE_GAMES=1200` soma 1.200 jogos sintéticos à lista (n
 
 | Onde                 | O que faz                                                                                                   |
 | -------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Quem está jogando?   | A cada abertura do app, escolha (ou crie) o perfil. Cada perfil tem foto, banner, nickname, ajustes, sessões e histórico de busca próprios |
-| Menu lateral         | Só Início, Instalados, Biblioteca, Loja e Amigos. Timeline, Desempenho e Coleção ficam dentro das telas e no menu de modos |
-| Barra de cima        | Busca, menu de modos (Modo Performance, Modo Zona, Modo Controle, Desempenho, Timeline e Mood), perfil e engrenagem de Ajustes |
+| Introdução           | Ao abrir: o feixe de luz atravessa o prisma, o som de abertura toca e aparece "clique em qualquer lugar" (desligável em Ajustes → Geral) |
+| Quem está jogando?   | A cada abertura do app, escolha (ou crie) o perfil. Num PC novo, é aqui que se cria o primeiro. Cada perfil tem foto, banner, nickname, ajustes, sessões, histórico de busca e a própria conta Steam |
+| Menu lateral         | Início, Instalados, Biblioteca, Emulação, Loja, Amigos e Perfil; embaixo, Adicionar jogo e Modo Controle |
+| Barra de cima        | Busca, menu de modos (Modo Performance, Modo Zona, Modo Controle, Desempenho e Mood), perfil e engrenagem de Ajustes |
 | Início               | Destaque, Continuar jogando, Instalados e Biblioteca, com ícones por seção                                   |
 | Instalados           | Aba fixa com o que está no disco e o espaço ocupado                                                         |
 | Biblioteca           | Todos os jogos da conta (e os de emulador, no filtro Emuladores) em grade virtualizada. Hover (ou foco pelo teclado): inclinação 3D, brilho e sombra dinâmica; após 0,8 s, trailer sem som, com volta imediata à capa |
 | Coleção              | A biblioteca como estante: % concluído, horas totais, mais jogados, gosto por gênero, lançamentos por ano e prateleiras por franquia |
 | Loja                 | Ofertas, mais vendidos, lançamentos e pré-vendas da Steam, grátis e promoções da Epic, em reais; busca na Steam; com a chave do IsThereAnyDeal, o menor preço histórico de cada jogo |
 | Página do jogo       | Trailer tocando sem som no banner; abas Visão geral, Conquistas (todas, com as bloqueadas), Avaliações (Steam, em português) e Oficina (itens em alta). Jogar/Instalar, "concluído", Smart Resume, Radar da Comunidade, requisitos mínimos (com checagem de RAM), avaliação da Steam, Metacritic, tags, franquia, tamanho |
-| Perfil               | Foto e banner editáveis, horas, sessões, conquistas, Game DNA (radar compartilhável em PNG), comparação de horas e bibliotecas, jogos em comum, amigos online |
+| Emulação             | Os jogos de console (por emulador), com filtro por console e o passo a passo para configurar |
+| Perfil               | Abas Visão geral e Timeline Gamer. Foto e banner editáveis, horas, sessões, conquistas, Game DNA (radar compartilhável em PNG), comparação de horas e bibliotecas, jogos em comum, amigos online |
 | Amigos               | Amigos da Steam (jogando, online, ausente, offline recentemente) e os outros perfis do PC, com atalho para o perfil de cada um |
-| Timeline Gamer       | Primeira sessão, último acesso, horas totais, recorde de sessão, sequências de dias, conquistas com data     |
+| Timeline Gamer       | Aba do Perfil. Primeira sessão, último acesso, horas totais, recorde de sessão, sequências de dias, conquistas com data     |
 | Performance          | GPU, CPU, RAM, temperaturas, FPS e VRAM ao vivo; configuração do Modo Performance; histórico das sessões     |
 | Modo Controle        | Abre no último jogo jogado (Smart Resume), intro de console, prateleira 3D, sons de sistema, vibração, abas no L2/R2, ajustes próprios e cursor virtual no analógico direito (R3 clica) |
 | Vitrine ociosa       | Sem interação e com o launcher em foco, passeia pela biblioteca com banners e trailers                        |
 | Créditos             | Ajustes → Créditos                                                                                            |
 
 ## Novidades desta versão
+
+- **Conta Steam por perfil:** cada perfil escolhe qual conta da Steam deste PC ele usa (ou nenhuma) e vê só os jogos, o tempo de jogo, as conquistas e os amigos dela. Antes, com duas contas no mesmo PC, as bibliotecas se misturavam. Sem chave, a separação usa o que a Steam guarda no disco por conta (jogos já jogados e jogos instalados, pelo dono do manifesto); com a chave da Steam Web API do próprio perfil, vem a lista completa, inclusive os nunca abertos. Perfis antigos continuam vendo tudo até escolherem a conta (a Biblioteca avisa).
+- **PC novo sem "Jogador" automático:** a primeira abertura pede para criar o perfil, com nickname e conta Steam.
+- **Introdução de abertura:** feixe de luz, prisma, espectro e um som de abertura sintetizado; clique, tecla ou botão do controle para entrar, com transição suave para a escolha de perfil.
+- **Barra lateral:** Emulação (com passo a passo quando vazio), Perfil como aba própria, e atalhos para Adicionar jogo e Modo Controle. A Timeline Gamer virou uma aba do Perfil.
+- **Aviso sobre as chaves de API** (Steam e IsThereAnyDeal): opcionais, pessoais como senha, guardadas só no PC, usadas só para ler; o que fazer se vazar.
+## 0.2.4
 
 - **Loja:** ofertas da Steam e da Epic com preço em reais, desconto e até quando vale. Com a chave gratuita do [IsThereAnyDeal](https://isthereanydeal.com/apps/my/) (Ajustes → Loja), cada jogo mostra o menor preço que já teve e um selo quando o preço atual é o menor de todos. A SteamDB não permite uso por apps, por isso o histórico vem do IsThereAnyDeal.
 - **Emuladores:** DuckStation (PS1), PCSX2 (PS2), PPSSPP (PSP), Dolphin (GameCube/Wii), Ryujinx (Switch) e mGBA (GBA). O Prisma não emula nada: aponte o emulador e a pasta dos jogos em Ajustes → Emuladores e eles entram na biblioteca com capa (libretro-thumbnails). Com "Saves na nuvem", os saves vão para uma pasta sincronizada (OneDrive, Google Drive ou Dropbox): o mais novo é trazido antes de jogar e enviado ao fechar.

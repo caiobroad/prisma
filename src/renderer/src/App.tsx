@@ -10,6 +10,7 @@ import { PerformanceCenter } from './components/PerformanceCenter'
 import { LaunchCinematic } from './components/LaunchCinematic'
 import { IdleShowcase } from './components/IdleShowcase'
 import { ProfileSelect } from './components/ProfileSelect'
+import { StartIntro } from './components/StartIntro'
 import { UpdateBanner, WhatsNew } from './components/UpdateBanner'
 import { HomeView, pickFeatured } from './views/HomeView'
 import { LibraryView, type LibPlatform } from './views/LibraryView'
@@ -17,13 +18,13 @@ import { RecentView } from './views/RecentView'
 import { FavoritesView } from './views/FavoritesView'
 import { GamePage } from './views/GamePage'
 import { moodZone, presetFor, zoneFor, zoneStyle } from './lib/zones'
-import { getState, initStore, scan, toast, useStore } from './lib/store'
+import { getState, initStore, scan, setState, toast, useStore } from './lib/store'
+import type { ProfileTab } from './views/ProfileView'
 import { useGamepad, useIdle, type PadAction } from './lib/input'
 import { activateFocused, setNavMode, spatialMove } from './lib/nav'
 import { rumble, sfx } from './lib/sounds'
 
 // Telas pesadas ou pouco visitadas só são baixadas/avaliadas quando abertas.
-const TimelineView = lazy(() => import('./views/TimelineView').then((m) => ({ default: m.TimelineView })))
 const PerformanceView = lazy(() => import('./views/PerformanceView').then((m) => ({ default: m.PerformanceView })))
 const SettingsView = lazy(() => import('./views/SettingsView').then((m) => ({ default: m.SettingsView })))
 const ProfileView = lazy(() => import('./views/ProfileView').then((m) => ({ default: m.ProfileView })))
@@ -76,6 +77,7 @@ export default function App() {
   const loaded = useStore((s) => s.loaded)
   const picking = useStore((s) => s.pickingProfile)
   const profileId = useStore((s) => s.profile?.id ?? null)
+  const intro = useStore((s) => s.intro)
 
   const [section, setSection] = useState<Section>('home')
   const [platform, setPlatform] = useState<LibPlatform>('all')
@@ -89,6 +91,8 @@ export default function App() {
   const [showcaseGame, setShowcaseGame] = useState<Game | null>(null)
   const [friend, setFriend] = useState<Friend | null>(null)
   const [colors, setColors] = useState<Record<number, string>>({})
+  const [profileTab, setProfileTab] = useState<ProfileTab>('overview')
+  const [settingsAnchor, setSettingsAnchor] = useState<string | null>(null)
   const origin = useRef<string | null>(null)
   const hoverTimer = useRef<number | null>(null)
 
@@ -135,10 +139,14 @@ export default function App() {
     )
   }, [])
 
-  const goSection = useCallback((s: Section) => {
+  const goSection = useCallback((target: Section) => {
+    // A Timeline Gamer mora no Perfil.
+    const s: Section = target === 'timeline' ? 'profile' : target
     transition(() => {
       setPageId(null)
       setSection(s)
+      if (s === 'profile') setProfileTab(target === 'timeline' ? 'timeline' : 'overview')
+      if (s !== 'settings') setSettingsAnchor(null)
       if (s === 'library' || s === 'installed') setPlatform('all')
       if (s !== 'profile') setFriend(null)
     })
@@ -156,6 +164,7 @@ export default function App() {
     transition(() => {
       setPageId(null)
       setFriend(null)
+      setProfileTab('overview')
       setSection('profile')
     })
   }, [])
@@ -178,6 +187,16 @@ export default function App() {
     },
     [section]
   )
+
+  /** Ajustes já rolando até um cartão (chaves de API, emuladores). */
+  const goSettings = useCallback((anchor?: string) => {
+    transition(() => {
+      setPageId(null)
+      setFriend(null)
+      setSection('settings')
+      setSettingsAnchor(anchor ?? null)
+    })
+  }, [])
 
   const goPlatform = useCallback((p: LibPlatform) => {
     transition(() => {
@@ -341,7 +360,11 @@ export default function App() {
       <ZoneBackdrop zone={zone} particles={settings.zoneParticles && !lite} paused={particlesPaused} lowFps={settings.performanceMode} light={false} />
 
       {picking ? (
-        <ProfileSelect />
+        intro ? (
+          <StartIntro onDone={() => setState({ intro: false })} />
+        ) : (
+          <ProfileSelect />
+        )
       ) : controller ? (
         <Suspense fallback={null}>
           <ControllerMode onExit={exitController} onFocusGame={setPadFocus} />
@@ -356,12 +379,11 @@ export default function App() {
             onBack={() => void goBack()}
             onController={() => setController(true)}
             onProfile={openProfile}
-            onSettings={() => goSection('settings')}
+            onSettings={() => goSettings()}
             onPerformance={() => goSection('performance')}
-            onTimeline={() => goSection('timeline')}
             settingsOn={section === 'settings' || section === 'credits'}
           />
-          <Sidebar section={section} onSection={goSection} platform={platform} />
+          <Sidebar section={section} onSection={goSection} viewingFriend={section === 'profile' && !!friend} onAdd={() => setAdding(true)} onController={() => setController(true)} />
           <main className="main">
             <div className={`section ${page ? 'covered' : ''}`} inert={page ? true : undefined}>
               <Suspense fallback={<div className="view-loading" />}>
@@ -381,17 +403,34 @@ export default function App() {
                     onAdd={() => setAdding(true)}
                     installedOnly={section === 'installed'}
                     onCollection={() => goSection('collection')}
+                    onSettings={goSettings}
+                  />
+                ) : null}
+                {section === 'emulation' ? (
+                  <LibraryView
+                    key="emulation"
+                    emuOnly
+                    query={query}
+                    onQuery={setQuery}
+                    platform="emu"
+                    onPlatform={goPlatform}
+                    heroKey={heroKey}
+                    onOpen={openGame}
+                    onHover={onHover}
+                    onAdd={() => setAdding(true)}
+                    onSettings={goSettings}
                   />
                 ) : null}
                 {section === 'collection' ? <CollectionView heroKey={heroKey} onOpen={openGame} onHover={onHover} onLibrary={() => goSection('library')} /> : null}
                 {section === 'recent' ? <RecentView heroKey={heroKey} onOpen={openGame} onHover={onHover} /> : null}
                 {section === 'favorites' ? <FavoritesView heroKey={heroKey} onOpen={openGame} onHover={onHover} /> : null}
-                {section === 'store' ? <StoreView onSettings={() => goSection('settings')} /> : null}
-                {section === 'friends' ? <FriendsView onFriend={openFriend} onSettings={() => goSection('settings')} /> : null}
-                {section === 'profile' ? <ProfileView key={friend?.id ?? 'me'} friend={friend} onFriend={openFriend} onFriends={() => goSection('friends')} /> : null}
-                {section === 'timeline' ? <TimelineView onOpen={openGame} /> : null}
+                {section === 'store' ? <StoreView onSettings={() => goSettings('api-keys')} /> : null}
+                {section === 'friends' ? <FriendsView onFriend={openFriend} onSettings={() => goSettings('api-keys')} /> : null}
+                {section === 'profile' ? (
+                  <ProfileView key={friend?.id ?? 'me'} friend={friend} onFriend={openFriend} onFriends={() => goSection('friends')} tab={profileTab} onTab={setProfileTab} onOpen={openGame} />
+                ) : null}
                 {section === 'performance' ? <PerformanceView /> : null}
-                {section === 'settings' ? <SettingsView onCredits={() => goSection('credits')} /> : null}
+                {section === 'settings' ? <SettingsView onCredits={() => goSection('credits')} anchor={settingsAnchor} /> : null}
                 {section === 'credits' ? <CreditsView /> : null}
               </Suspense>
             </div>

@@ -2,13 +2,15 @@ import { useEffect, useState } from 'react'
 import { EMU_SYSTEMS, type ControllerSettings, type EmuInfo, type EmuSystemId, type Settings } from '@shared/types'
 import { IconFolder, IconHeart, IconRefresh, IconSearch, IconSparkles } from '../components/Icons'
 import { Avatar } from '../components/Avatar'
+import { useSteamAccounts } from '../components/SteamAccountPicker'
 import { MoodPicker } from '../components/MoodPicker'
 import { ScrollView } from '../components/ScrollView'
 import { PF, relativeTime } from '../lib/format'
 import { ZONE_PRESETS } from '../lib/zones'
 import { refreshProfiles, saveProfile, setState, switchProfile, toast, updateSettings, useStore } from '../lib/store'
 import { invalidateSocial } from '../lib/social'
-import { sfx } from '../lib/sounds'
+import { sfx, startupChime } from '../lib/sounds'
+import { introEnabled, setIntroEnabled } from '../lib/intro'
 
 type BoolKey = { [K in keyof Settings]: Settings[K] extends boolean ? K : never }[keyof Settings]
 
@@ -59,7 +61,8 @@ function Rows({ items }: { items: Array<{ key: BoolKey; title: string; desc: str
   )
 }
 
-export function SettingsView({ onCredits }: { onCredits: () => void }) {
+/** anchor: rola até um cartão (ex.: 'api-keys', 'emulators') e o destaca. */
+export function SettingsView({ onCredits, anchor }: { onCredits: () => void; anchor?: string | null }) {
   const settings = useStore((s) => s.settings)
   const sources = useStore((s) => s.sources)
   const scanning = useStore((s) => s.scanning)
@@ -67,6 +70,18 @@ export function SettingsView({ onCredits }: { onCredits: () => void }) {
   useEffect(() => {
     void window.nexus.version().then(setVer)
   }, [])
+  useEffect(() => {
+    if (!anchor) return
+    const t = window.setTimeout(() => {
+      const el = document.getElementById(anchor)
+      if (!el) return
+      el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+      el.classList.remove('flash')
+      void el.offsetWidth
+      el.classList.add('flash')
+    }, 380)
+    return () => window.clearTimeout(t)
+  }, [anchor])
 
   return (
     <ScrollView>
@@ -100,37 +115,32 @@ export function SettingsView({ onCredits }: { onCredits: () => void }) {
 
         <ProfileCard />
 
-        <section className="glass card">
-          <h2 className="card-title">Amigos e comunidade</h2>
-          <div className="set">
+        <section className="glass card span-2" id="api-keys">
+          <h2 className="card-title">Chaves de API (opcionais)</h2>
+          <ApiWarning />
+          <div className="set two">
             <div className="it col">
               <div>
                 <b>Chave da Steam Web API</b>
                 <span>
-                  Opcional. Com ela, o Prisma mostra quem está online ou jogando e compara bibliotecas. Gere a sua em{' '}
+                  Mostra os amigos online ou jogando, compara bibliotecas e traz a lista completa de jogos da sua conta Steam, inclusive os que você nunca abriu. Gere em{' '}
                   <button className="link" onClick={() => window.nexus.shell.openExternal('https://steamcommunity.com/dev/apikey')}>
                     steamcommunity.com/dev/apikey
                   </button>
-                  . Fica só neste PC.
+                  , entrando com a mesma conta escolhida no perfil. No campo de domínio, pode usar <code>localhost</code>.
                 </span>
               </div>
               <ApiKeyField value={settings.steamApiKey} />
             </div>
-          </div>
-        </section>
-
-        <section className="glass card">
-          <h2 className="card-title">Loja</h2>
-          <div className="set">
             <div className="it col">
               <div>
-                <b>Chave do IsThereAnyDeal</b>
+                <b>Chave do IsThereAnyDeal (Loja)</b>
                 <span>
-                  Opcional. Com ela, a Loja mostra o menor preço que cada jogo já teve (Steam, Epic e outras lojas, em reais). Crie uma conta e gere a chave em{' '}
+                  Mostra na Loja o menor preço que cada jogo já teve, em reais, somando Steam, Epic e outras lojas. Crie uma conta grátis e gere a chave em{' '}
                   <button className="link" onClick={() => window.nexus.shell.openExternal('https://isthereanydeal.com/apps/my/')}>
                     isthereanydeal.com/apps/my
                   </button>
-                  . Fica só neste PC.
+                  .
                 </span>
               </div>
               <ItadKeyField value={settings.itadKey} />
@@ -189,6 +199,7 @@ export function SettingsView({ onCredits }: { onCredits: () => void }) {
           <h2 className="card-title">Geral</h2>
           <div className="set">
             <Rows items={GENERAL} />
+            <IntroRow />
             <div className="it">
               <div>
                 <b>Atalho global</b>
@@ -268,6 +279,34 @@ export function SettingsView({ onCredits }: { onCredits: () => void }) {
   )
 }
 
+/** Introdução de abertura (vale para o PC todo: aparece antes da escolha de perfil). */
+function IntroRow() {
+  const [on, setOn] = useState(introEnabled)
+  return (
+    <div className="it">
+      <div>
+        <b>Introdução ao abrir</b>
+        <span>O feixe de luz, o som de abertura e “clique em qualquer lugar” antes da escolha de perfil</span>
+      </div>
+      <div className="row">
+        <button className="btn ghost sm" onClick={() => startupChime()}>
+          Ouvir
+        </button>
+        <button
+          className="tg"
+          role="switch"
+          aria-checked={on}
+          aria-label="Introdução ao abrir"
+          onClick={() => {
+            setIntroEnabled(!on)
+            setOn(!on)
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
 function ShortcutField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [recording, setRecording] = useState(false)
   return (
@@ -330,6 +369,34 @@ function ApiKeyField({ value }: { value: string }) {
       <button className="btn ghost sm" onClick={() => setShow((s) => !s)}>
         {show ? 'Ocultar' : 'Mostrar'}
       </button>
+    </div>
+  )
+}
+
+/** Aviso sobre as chaves de API: o que são, o que o Prisma faz com elas e o que fazer se vazarem. */
+export function ApiWarning() {
+  return (
+    <div className="api-warn" role="note">
+      <span className="api-warn-ico" aria-hidden="true">
+        !
+      </span>
+      <div>
+        <b>Antes de colar uma chave</b>
+        <ul>
+          <li>
+            <b>São opcionais.</b> Sem elas o Prisma funciona normalmente; você só deixa de ver amigos online, a lista completa da Steam e o menor preço histórico.
+          </li>
+          <li>
+            <b>Trate como uma senha.</b> Não compartilhe e não deixe aparecer em prints, vídeos ou lives: quem tem a sua chave da Steam consegue consultar dados da sua conta.
+          </li>
+          <li>
+            <b>Ficam só neste PC</b>, nos ajustes do seu perfil, e servem apenas para <b>ler</b> informações públicas. O Prisma nunca compra, vende, troca nem altera nada nas suas contas.
+          </li>
+          <li>
+            <b>Vazou?</b> Revogue na mesma página onde gerou e crie outra. A Steam só libera chaves para contas que já gastaram pelo menos US$ 5 na loja.
+          </li>
+        </ul>
+      </div>
     </div>
   )
 }
@@ -415,7 +482,7 @@ function EmulatorsCard() {
   }
   const total = Object.values(info.counts).reduce((n, c) => n + (c ?? 0), 0)
   return (
-    <section className="glass card span-2">
+    <section className="glass card span-2" id="emulators">
       <div className="card-title row between">
         <h2>Emuladores</h2>
         <div className="row">
@@ -497,7 +564,14 @@ function EmulatorsCard() {
 function ProfileCard() {
   const profiles = useStore((s) => s.profiles)
   const me = useStore((s) => s.profile)
+  const accounts = useSteamAccounts()
   const [confirm, setConfirm] = useState<number | null>(null)
+  const accountLabel = (id: string | null): string => {
+    if (id === '') return 'Sem Steam: Epic, GOG, Xbox, emuladores e jogos adicionados'
+    if (id == null) return 'Vê os jogos de todas as contas Steam do PC. Escolha uma conta ao lado'
+    const a = accounts?.find((x) => x.accountId === id)
+    return `Biblioteca e tempo de jogo da conta Steam ${a ? `“${a.name}”` : 'escolhida'}`
+  }
   const remove = async (id: number): Promise<void> => {
     try {
       await window.nexus.profiles.remove(id)
@@ -510,7 +584,7 @@ function ProfileCard() {
     setConfirm(null)
   }
   return (
-    <section className="glass card">
+    <section className="glass card" id="profiles">
       <div className="card-title row between">
         <h2>Perfis</h2>
         <button className="btn ghost sm" onClick={switchProfile}>
@@ -527,15 +601,27 @@ function ProfileCard() {
                   {p.nickname}
                   {p.id === me?.id ? <em className="you">você</em> : null}
                 </b>
-                <span>{p.steamLinked ? 'Dono da conta Steam deste PC: soma o tempo registrado pela Steam' : 'Conta só as sessões feitas pelo Prisma'}</span>
+                <span>{accountLabel(p.steamAccount)}</span>
               </div>
             </div>
             <div className="row">
-              {!p.steamLinked ? (
-                <button className="btn ghost sm" onClick={() => void saveProfile(p.id, { steamLinked: true }).then(refreshProfiles)}>
-                  Usar conta Steam
-                </button>
-              ) : null}
+              <select
+                className="select-inline"
+                value={p.steamAccount ?? '__all'}
+                onChange={(e) => {
+                  if (e.target.value !== '__all') void saveProfile(p.id, { steamAccount: e.target.value }).then(refreshProfiles)
+                }}
+                aria-label={`Conta Steam de ${p.nickname}`}
+                title="Conta Steam deste perfil"
+              >
+                {p.steamAccount == null ? <option value="__all">Todas as contas do PC</option> : null}
+                {(accounts ?? []).map((a) => (
+                  <option key={a.accountId} value={a.accountId}>
+                    Steam: {a.name}
+                  </option>
+                ))}
+                <option value="">Sem Steam</option>
+              </select>
               {p.id !== me?.id && profiles.length > 1 ? (
                 confirm === p.id ? (
                   <button className="btn danger sm" onClick={() => void remove(p.id)}>

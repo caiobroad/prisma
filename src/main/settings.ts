@@ -6,12 +6,13 @@ import { activeProfileId } from './profiles'
 /** Ajustes do perfil ativo (antes da seleção de perfil, os do último perfil usado). */
 function key(): string {
   const id = activeProfileId()
-  return id == null ? 'settings' : `settings:${id}`
+  // Sem perfil ainda (PC novo): guarda à parte; o primeiro perfil criado herda.
+  return id == null ? 'settings:pending' : `settings:${id}`
 }
 
 export function loadSettings(): Settings {
   try {
-    const raw = getSetting(key()) ?? getSetting('settings')
+    const raw = getSetting(key()) ?? getSetting('settings') ?? getSetting('settings:pending')
     if (!raw) return structuredClone(DEFAULT_SETTINGS)
     const saved = JSON.parse(raw) as Partial<Settings> & { theme?: string }
     const s: Settings = { ...DEFAULT_SETTINGS, ...saved, controller: { ...DEFAULT_CONTROLLER, ...(saved.controller ?? {}) } }

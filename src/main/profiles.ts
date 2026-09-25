@@ -15,6 +15,7 @@ interface Row {
   avatar: string | null
   banner: string | null
   steam_linked: number
+  steam_account: string | null
   created_at: number
   last_used: number | null
 }
@@ -24,7 +25,8 @@ const toProfile = (r: Row): Profile => ({
   nickname: r.nickname,
   avatar: r.avatar,
   banner: r.banner,
-  steamLinked: Number(r.steam_linked) === 1,
+  steamLinked: Number(r.steam_linked) === 1 || !!r.steam_account,
+  steamAccount: r.steam_account ?? null,
   createdAt: Number(r.created_at),
   lastUsed: r.last_used == null ? null : Number(r.last_used)
 })
@@ -54,10 +56,15 @@ export function getProfile(id: number): Profile | null {
   return r ? toProfile(r) : null
 }
 
-/** Primeiro uso: cria o perfil inicial, dono da conta Steam, herdando ajustes e sessões atuais. */
+/**
+ * Quem atualizou de uma versão sem perfis ganha um perfil com os ajustes e sessões antigos.
+ * Num PC novo não: a tela de perfis abre para criar o primeiro (com a conta Steam escolhida).
+ */
 function ensureDefault(): void {
   const n = (getDb().prepare('SELECT COUNT(*) AS n FROM profiles').get() as { n: number }).n
   if (Number(n) > 0) return
+  const sessions = Number((getDb().prepare('SELECT COUNT(*) AS n FROM sessions').get() as { n: number }).n)
+  if (!getSetting('settings') && sessions === 0) return
   const info = getDb()
     .prepare('INSERT INTO profiles (nickname, steam_linked, created_at) VALUES (?, 1, ?)')
     .run('Jogador', Date.now())
@@ -74,18 +81,36 @@ export function selectProfile(id: number): void {
   getDb().prepare('UPDATE profiles SET last_used = ? WHERE id = ?').run(Date.now(), id)
 }
 
-export function createProfile(nickname: string): Profile {
+/** steamAccount: id da conta Steam escolhida ('' = sem Steam). */
+export function createProfile(nickname: string, steamAccount = ''): Profile {
   const name = nickname.trim().slice(0, 32) || 'Jogador'
-  const info = getDb().prepare('INSERT INTO profiles (nickname, created_at) VALUES (?, ?)').run(name, Date.now())
-  return getProfile(Number(info.lastInsertRowid))!
+  const account = /^\d+$/.test(steamAccount) ? steamAccount : ''
+  const info = getDb()
+    .prepare('INSERT INTO profiles (nickname, steam_linked, steam_account, created_at) VALUES (?, ?, ?, ?)')
+    .run(name, account ? 1 : 0, account, Date.now())
+  const id = Number(info.lastInsertRowid)
+  // Primeiro perfil do PC: as sessões registradas antes dele (se houver) passam a ser suas.
+  if (Number((getDb().prepare('SELECT COUNT(*) AS n FROM profiles').get() as { n: number }).n) === 1) {
+    adoptOrphanSessions(id)
+    // Ajustes mexidos antes de existir perfil (PC novo) passam a ser dele.
+    const pending = getSetting('settings:pending')
+    if (pending) {
+      setSetting(`settings:${id}`, pending)
+      getDb().prepare('DELETE FROM settings WHERE key = ?').run('settings:pending')
+    }
+  }
+  return getProfile(id)!
 }
 
-export function updateProfile(id: number, patch: Partial<Pick<Profile, 'nickname' | 'avatar' | 'banner' | 'steamLinked'>>): Profile {
+export function updateProfile(id: number, patch: Partial<Pick<Profile, 'nickname' | 'avatar' | 'banner' | 'steamLinked' | 'steamAccount'>>): Profile {
   const db = getDb()
   if (patch.nickname != null) db.prepare('UPDATE profiles SET nickname = ? WHERE id = ?').run(patch.nickname.trim().slice(0, 32) || 'Jogador', id)
   if (patch.avatar !== undefined) db.prepare('UPDATE profiles SET avatar = ? WHERE id = ?').run(patch.avatar, id)
   if (patch.banner !== undefined) db.prepare('UPDATE profiles SET banner = ? WHERE id = ?').run(patch.banner, id)
-  if (patch.steamLinked != null) {
+  if (patch.steamAccount !== undefined) {
+    const account = patch.steamAccount && /^\d+$/.test(patch.steamAccount) ? patch.steamAccount : ''
+    db.prepare('UPDATE profiles SET steam_account = ?, steam_linked = ? WHERE id = ?').run(account, account ? 1 : 0, id)
+  } else if (patch.steamLinked != null) {
     // Só um perfil pode ser o dono da conta Steam da máquina.
     if (patch.steamLinked) db.prepare('UPDATE profiles SET steam_linked = 0').run()
     db.prepare('UPDATE profiles SET steam_linked = ? WHERE id = ?').run(patch.steamLinked ? 1 : 0, id)

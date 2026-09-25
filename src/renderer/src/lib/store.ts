@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { Game, MainEvent, PerfSample, Profile, ScanResult, Settings, SourceStatus, UpdateStatus, WindowState } from '@shared/types'
 import { DEFAULT_SETTINGS } from '@shared/types'
+import { introEnabled } from './intro'
 
 /**
  * Estado global com assinatura por seletor: cada componente só re-renderiza quando
@@ -43,6 +44,8 @@ export interface State {
   update: UpdateStatus | null
   /** Versão cujas novidades aparecem no popup (depois de atualizar ou em Ajustes). */
   whatsNew: string | null
+  /** Introdução de abertura antes da escolha de perfil. */
+  intro: boolean
 }
 
 let state: State = {
@@ -67,7 +70,8 @@ let state: State = {
   ramGb: 0,
   enrich: null,
   update: null,
-  whatsNew: null
+  whatsNew: null,
+  intro: false
 }
 
 const listeners = new Set<() => void>()
@@ -223,8 +227,9 @@ export async function refreshProfiles(): Promise<void> {
 /** Entra com um perfil: os ajustes, sessões e estatísticas passam a ser dele. */
 export async function selectProfile(id: number): Promise<void> {
   const settings = await window.nexus.profiles.select(id)
-  const [profiles, profile] = await Promise.all([window.nexus.profiles.list(), window.nexus.profiles.active()])
-  setState({ settings, profiles, profile, pickingProfile: false })
+  // A biblioteca Steam depende da conta do perfil: recarrega a lista junto.
+  const [profiles, profile, games] = await Promise.all([window.nexus.profiles.list(), window.nexus.profiles.active(), window.nexus.games.list()])
+  setState({ settings, profiles, profile, games, loaded: true, pickingProfile: false })
 }
 
 export function switchProfile(): void {
@@ -234,6 +239,7 @@ export function switchProfile(): void {
 export async function saveProfile(id: number, patch: Parameters<typeof window.nexus.profiles.update>[1]): Promise<void> {
   const p = await window.nexus.profiles.update(id, patch)
   setState({ profiles: state.profiles.map((x) => (x.id === p.id ? p : x)), profile: state.profile?.id === p.id ? p : state.profile })
+  if (patch.steamAccount !== undefined && state.profile?.id === p.id) await refresh()
 }
 
 /** Guarda a busca no histórico do perfil (8 mais recentes, sem repetição). */
@@ -276,7 +282,7 @@ export function initStore(): void {
   })
   // A cada abertura do app pergunta quem está jogando (a janela recriada depois de um jogo, não).
   void Promise.all([window.nexus.profiles.list(), window.nexus.profiles.active(), window.nexus.profiles.needsPick()]).then(
-    ([profiles, profile, needsPick]) => setState({ profiles, profile, pickingProfile: needsPick })
+    ([profiles, profile, needsPick]) => setState({ profiles, profile, pickingProfile: needsPick, intro: needsPick && introEnabled() })
   )
   void window.nexus.window.state().then((win) => setState({ win }))
   window.nexus.on((ev: MainEvent) => {

@@ -9,7 +9,7 @@ import {
   IconModes,
   IconSettings,
   IconSpark,
-  IconTimeline,
+  IconThermo,
   IconWinClose,
   IconWinMax,
   IconWinMin,
@@ -30,7 +30,6 @@ interface Props {
   onProfile: () => void
   onSettings: () => void
   onPerformance: () => void
-  onTimeline: () => void
   settingsOn: boolean
 }
 
@@ -50,7 +49,7 @@ export function PrismaMark() {
 
 /**
  * Barra de cima enxuta: busca no centro; à direita, o menu de modos (Performance, Controle,
- * Mood, Zona, desempenho e Timeline), o perfil e a engrenagem. A sincronização é automática.
+ * Mood, Zona e desempenho), o perfil e a engrenagem. A sincronização é automática.
  */
 export const TitleBar = memo(function TitleBar(p: Props) {
   const win = useStore((s) => s.win)
@@ -77,7 +76,7 @@ export const TitleBar = memo(function TitleBar(p: Props) {
             Performance
           </span>
         ) : null}
-        <ModesMenu onController={p.onController} onPerformance={p.onPerformance} onTimeline={p.onTimeline} />
+        <ModesMenu onController={p.onController} onPerformance={p.onPerformance} />
         {profile ? (
           <button
             className={`tb-profile st-${status}`}
@@ -112,7 +111,7 @@ export const TitleBar = memo(function TitleBar(p: Props) {
   )
 })
 
-function ModesMenu({ onController, onPerformance, onTimeline }: { onController: () => void; onPerformance: () => void; onTimeline: () => void }) {
+function ModesMenu({ onController, onPerformance }: { onController: () => void; onPerformance: () => void }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const perfMode = useStore((s) => s.settings.performanceMode)
@@ -173,16 +172,13 @@ function ModesMenu({ onController, onPerformance, onTimeline }: { onController: 
                 <small>Interface de console · Start/Options no controle</small>
               </span>
             </button>
-            <div className="modes-split">
-              <button className="modes-mini" onClick={go(onPerformance)}>
-                <IconGauge width={15} height={15} />
-                Desempenho
-              </button>
-              <button className="modes-mini" onClick={go(onTimeline)}>
-                <IconTimeline width={15} height={15} />
-                Timeline Gamer
-              </button>
-            </div>
+            <button className="modes-row" onClick={go(onPerformance)}>
+              <IconThermo width={17} height={17} />
+              <span>
+                <b>Desempenho</b>
+                <small>CPU, GPU, temperaturas e FPS ao vivo; histórico das sessões</small>
+              </span>
+            </button>
           </div>
           <div className="mood-pop-head">
             <b>Mood da Biblioteca</b>

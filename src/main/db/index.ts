@@ -197,6 +197,8 @@ function addColumns(d: DatabaseSync, table: string, cols: Array<[string, string]
 function migrate(d: DatabaseSync): void {
   addColumns(d, 'games', COLUMNS)
   addColumns(d, 'sessions', SESSION_COLUMNS)
+  // Conta Steam do perfil: NULL = perfil antigo (vê tudo), '' = sem Steam, '<id da conta>' = só os jogos dela.
+  addColumns(d, 'profiles', [['steam_account', 'TEXT']])
   const v = (d.prepare('PRAGMA user_version').get() as { user_version: number }).user_version
   if (v < 3) {
     // Detalhes passam a incluir trailer e referência da Steam: busca de novo sob demanda.

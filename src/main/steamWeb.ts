@@ -34,10 +34,17 @@ async function currentUser(): Promise<LocalUser | null> {
   try {
     const root = parseVdf(readFileSync(join(sp, 'config', 'loginusers.vdf'), 'utf8'))
     const users = (vdfGet(root, 'users') ?? root) as VdfObject
+    // A conta Steam escolhida pelo perfil ativo; sem escolha, a mais recente do PC.
+    const pid = activeProfileId()
+    const chosen = pid == null ? null : (listProfiles().find((p) => p.id === pid)?.steamAccount ?? null)
+    if (chosen === '') return null
     let best: LocalUser | null = null
     let bestTs = -1
     for (const [id, v] of Object.entries(users)) {
       if (typeof v !== 'object') continue
+      if (chosen && /^\d{17}$/.test(id) && toAccount(id) === chosen) {
+        return { steamId: id, accountId: chosen, name: String(vdfGet(v, 'PersonaName') ?? '') }
+      }
       const ts = Number(vdfGet(v, 'Timestamp') ?? 0) + (vdfGet(v, 'MostRecent') === '1' ? 1e12 : 0)
       if (ts > bestTs) {
         bestTs = ts
@@ -208,7 +215,7 @@ async function withTags(lib: Omit<FriendLibrary, 'tags'>): Promise<FriendLibrary
 function localProfileLibrary(profileId: number, friendId: string): Omit<FriendLibrary, 'tags'> {
   const p = listProfiles().find((x) => x.id === profileId)
   if (!p) return { friendId, games: [], available: false, reason: 'Perfil não encontrado' }
-  const stats = profileStats(profileId, p.steamLinked, 400)
+  const stats = profileStats(profileId, p.steamLinked, 400, p.steamAccount)
   const games = stats.topGames.map((t) => {
     const g = getGame(t.gameId)
     return { appid: steamAppIdFor(t.gameId) ?? `game:${t.gameId}`, name: g?.title ?? '?', minutes: Math.round(t.seconds / 60) }
